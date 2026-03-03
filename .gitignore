@@ -1,0 +1,19 @@
+# Streamlit Cloud deployment
+# Non caricare su GitHub:
+.streamlit/secrets.toml
+__pycache__/
+*.pyc
+cantina_db.json
+mignon_db.json
+cantina.py
+cantina3.py
+credenziali.json
+img_cantina/
+img_mignon/
+migrate_data.py
+upload_images.py
+test.py
+test_cantina.py
+instal.bat
+AVVIA_CANTINA.bat
+*.bat
