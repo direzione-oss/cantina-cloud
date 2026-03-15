@@ -1,64 +1,161 @@
 """
-Modulo client Supabase per Le Cantine di Gian Carlo.
-Gestisce connessione, CRUD e storage immagini.
+supabase_client.py — CantinaPro SaaS
+Client Supabase con supporto multi-tenant, autenticazione custom e CRUD.
 """
 import streamlit as st
 from supabase import create_client, Client
+import hashlib, secrets
 
-# ── Inizializzazione ──────────────────────────────────────────────────────────
+BUCKET = "cantina-images"
+
+# ── Init ──────────────────────────────────────────────────────────────────────
 
 @st.cache_resource
 def init_supabase() -> Client:
-    """Crea e restituisce il client Supabase (cached)."""
     url = st.secrets["SUPABASE_URL"]
     key = st.secrets["SUPABASE_KEY"]
     return create_client(url, key)
 
-BUCKET = "cantina-images"
+# ── Auth ──────────────────────────────────────────────────────────────────────
 
-# ── CRUD Generiche ────────────────────────────────────────────────────────────
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
 
-def get_all(table: str) -> list[dict]:
-    """Legge tutti i record da una tabella, ordinati per id."""
+def verify_login(email: str, password: str) -> dict | None:
+    """Verifica credenziali e ritorna il tenant (utente) o None."""
     sb = init_supabase()
-    resp = sb.table(table).select("*").order("id").execute()
-    return resp.data or []
+    pw_hash = hash_password(password)
+    resp = sb.table("tenants").select("*").eq("email", email).eq("password_hash", pw_hash).eq("attivo", True).execute()
+    return resp.data[0] if resp.data else None
 
-def insert_record(table: str, data: dict) -> dict:
-    """Inserisce un record e ritorna il record appena creato."""
+# ── Tenants (clienti) ─────────────────────────────────────────────────────────
+
+def get_all_tenants() -> list[dict]:
     sb = init_supabase()
-    resp = sb.table(table).insert(data).execute()
+    return sb.table("tenants").select("*").order("created_at", desc=True).execute().data or []
+
+def get_tenant(tenant_id: str) -> dict:
+    sb = init_supabase()
+    resp = sb.table("tenants").select("*").eq("id", tenant_id).execute()
     return resp.data[0] if resp.data else {}
 
-def update_record(table: str, record_id: int, data: dict) -> dict:
-    """Aggiorna un record per ID."""
+def create_tenant(data: dict) -> dict:
     sb = init_supabase()
-    resp = sb.table(table).update(data).eq("id", record_id).execute()
+    if "password" in data:
+        data["password_hash"] = hash_password(data.pop("password"))
+    resp = sb.table("tenants").insert(data).execute()
     return resp.data[0] if resp.data else {}
 
-def delete_record(table: str, record_id: int):
-    """Elimina un record per ID."""
+def update_tenant(tenant_id: str, data: dict) -> dict:
     sb = init_supabase()
-    sb.table(table).delete().eq("id", record_id).execute()
+    if "password" in data and data["password"]:
+        data["password_hash"] = hash_password(data.pop("password"))
+    elif "password" in data:
+        data.pop("password")
+    resp = sb.table("tenants").update(data).eq("id", tenant_id).execute()
+    return resp.data[0] if resp.data else {}
 
-# ── Storage Immagini ──────────────────────────────────────────────────────────
+def toggle_tenant(tenant_id: str, attivo: bool):
+    sb = init_supabase()
+    sb.table("tenants").update({"attivo": attivo}).eq("id", tenant_id).execute()
+
+def get_tenant_by_slug(slug: str) -> dict:
+    sb = init_supabase()
+    resp = sb.table("tenants").select("*").eq("portale_slug", slug).eq("portale_attivo", True).execute()
+    return resp.data[0] if resp.data else {}
+
+# ── Vini / Mignon (filtrati per tenant) ───────────────────────────────────────
+
+def get_vini(tenant_id: str) -> list[dict]:
+    sb = init_supabase()
+    return sb.table("vini").select("*").eq("tenant_id", tenant_id).order("id").execute().data or []
+
+def get_mignon(tenant_id: str) -> list[dict]:
+    sb = init_supabase()
+    return sb.table("mignon").select("*").eq("tenant_id", tenant_id).order("id").execute().data or []
+
+def get_vini_portale(tenant_id: str) -> list[dict]:
+    """Vini pubblici (in vendita) per il portale."""
+    sb = init_supabase()
+    return sb.table("vini").select("*").eq("tenant_id", tenant_id).gt("qta", 0).neq("tipo_cat", "Provati").order("tipo_cat").execute().data or []
+
+def insert_vino(tenant_id: str, data: dict) -> dict:
+    sb = init_supabase()
+    data["tenant_id"] = tenant_id
+    resp = sb.table("vini").insert(data).execute()
+    return resp.data[0] if resp.data else {}
+
+def insert_mignon(tenant_id: str, data: dict) -> dict:
+    sb = init_supabase()
+    data["tenant_id"] = tenant_id
+    resp = sb.table("mignon").insert(data).execute()
+    return resp.data[0] if resp.data else {}
+
+def update_vino(record_id: int, data: dict) -> dict:
+    sb = init_supabase()
+    resp = sb.table("vini").update(data).eq("id", record_id).execute()
+    return resp.data[0] if resp.data else {}
+
+def update_mignon(record_id: int, data: dict) -> dict:
+    sb = init_supabase()
+    resp = sb.table("mignon").update(data).eq("id", record_id).execute()
+    return resp.data[0] if resp.data else {}
+
+def delete_vino(record_id: int):
+    sb = init_supabase()
+    sb.table("vini").delete().eq("id", record_id).execute()
+
+def delete_mignon(record_id: int):
+    sb = init_supabase()
+    sb.table("mignon").delete().eq("id", record_id).execute()
+
+# ── Storage ───────────────────────────────────────────────────────────────────
 
 def upload_image(file_bytes: bytes, filename: str, folder: str = "vini") -> str:
-    """
-    Carica un'immagine su Supabase Storage e ritorna l'URL pubblico.
-    folder: 'vini' o 'mignon'
-    """
     sb = init_supabase()
     path = f"{folder}/{filename}"
-    # Rimuovi file esistente (ignora errore se non esiste)
     try:
         sb.storage.from_(BUCKET).remove([path])
     except:
         pass
     sb.storage.from_(BUCKET).upload(path, file_bytes, file_options={"content-type": "image/jpeg"})
-    return get_public_url(path)
+    return sb.storage.from_(BUCKET).get_public_url(path)
 
 def get_public_url(path: str) -> str:
-    """Genera l'URL pubblico di un file nello storage."""
     sb = init_supabase()
     return sb.storage.from_(BUCKET).get_public_url(path)
+
+# ── Statistiche globali (superadmin) ─────────────────────────────────────────
+
+def get_stats_globali() -> dict:
+    sb = init_supabase()
+    tenants = sb.table("tenants").select("id", count="exact").eq("attivo", True).execute()
+    vini = sb.table("vini").select("qta, prezzo", count="exact").gt("qta", 0).neq("tipo_cat","Provati").execute()
+    tot_bottiglie = sum(int(v.get("qta", 0)) for v in (vini.data or []))
+    tot_valore = sum(int(v.get("qta", 0)) * float(str(v.get("prezzo", 0)).replace(",", ".")) for v in (vini.data or []))
+    return {
+        "n_clienti": tenants.count or 0,
+        "n_bottiglie": tot_bottiglie,
+        "valore_totale": tot_valore,
+        "n_vini_records": vini.count or 0,
+    }
+
+# ── Compat. vecchia API (usata in cantina_cloud.py originale) ─────────────────
+
+def get_all(table: str) -> list[dict]:
+    sb = init_supabase()
+    return sb.table(table).select("*").order("id").execute().data or []
+
+def insert_record(table: str, data: dict) -> dict:
+    sb = init_supabase()
+    resp = sb.table(table).insert(data).execute()
+    return resp.data[0] if resp.data else {}
+
+def update_record(table: str, record_id: int, data: dict) -> dict:
+    sb = init_supabase()
+    resp = sb.table(table).update(data).eq("id", record_id).execute()
+    return resp.data[0] if resp.data else {}
+
+def delete_record(table: str, record_id: int):
+    sb = init_supabase()
+    sb.table(table).delete().eq("id", record_id).execute()
