@@ -115,8 +115,15 @@ div.stButton > button[kind="secondary"]:hover {{
     background: {CARD_BG}; border-radius: 12px; padding: 16px;
     border: 1px solid #2A2A2A; border-top: 3px solid {PRIMARY};
 }}
-[data-testid="stMetricValue"] {{ color: {ACCENT} !important; font-weight: 700 !important; }}
-[data-testid="stMetricLabel"] p {{ color: #AAAAAA !important; font-size: 0.82em !important; }}
+[data-testid="stMetricValue"],
+[data-testid="stMetricValue"] * {{ color: {ACCENT} !important; font-weight: 700 !important; }}
+[data-testid="stMetricLabel"],
+[data-testid="stMetricLabel"] p,
+[data-testid="stMetricLabel"] div,
+[data-testid="stMetricLabel"] span,
+[data-testid="stMetricLabel"] label {{
+    color: #CCCCCC !important; font-size: 0.85em !important; opacity: 1 !important;
+}}
 
 /* ── TABS ── */
 [data-testid="stTabs"] button {{
