@@ -106,19 +106,34 @@ div.stButton > button {{
     background: linear-gradient(135deg, {PRIMARY}, #6B1414) !important;
     color: white !important; border: none !important; border-radius: 8px !important;
     font-weight: 600 !important; font-family: 'Inter', sans-serif !important;
-    transition: all 0.2s ease !important; box-shadow: 0 2px 8px rgba(139,26,26,0.3) !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 0 2px 8px rgba(139,26,26,0.3) !important;
 }}
 div.stButton > button:hover {{
     transform: translateY(-1px) !important;
     box-shadow: 0 4px 16px rgba(139,26,26,0.5) !important;
     background: linear-gradient(135deg, #a32020, {PRIMARY}) !important;
 }}
-div.stButton > button[kind="secondary"] {{
-    background: #252525 !important; border: 1px solid #3A3A3A !important;
-    color: {TEXT_MAIN} !important; box-shadow: none !important;
+/* Secondary buttons: Streamlit usa data-testid nel DOM */
+[data-testid="baseButton-secondary"] {{
+    background: #2A2A2A !important;
+    border: 1px solid #4A4A4A !important;
+    color: {TEXT_MAIN} !important;
+    box-shadow: none !important;
+    font-weight: 500 !important;
 }}
-div.stButton > button[kind="secondary"]:hover {{
-    border-color: {ACCENT} !important; color: {ACCENT} !important; transform: none !important;
+[data-testid="baseButton-secondary"]:hover {{
+    border-color: {ACCENT} !important;
+    color: {ACCENT} !important;
+    background: #1E1E1E !important;
+    transform: none !important;
+}}
+/* Pulsanti emoji/icona piccoli (−, +, ✏️, ecc.) */
+[data-testid="baseButton-secondary"][data-size="small"],
+div.stButton > button[data-testid="baseButton-secondary"] {{
+    background: #2A2A2A !important;
+    border: 1px solid #3A3A3A !important;
+    color: {TEXT_MAIN} !important;
 }}
 
 /* ── METRICHE ── */
@@ -809,20 +824,25 @@ def grid_vini(tenant, tipo="vini"):
 
     st.markdown("---")
 
-    # Modifica in sidebar
+    # Modifica in pagina
     if st.session_state.id_modifica:
         vino_m = next((v for v in data if v["id"] == st.session_state.id_modifica), None)
         if vino_m:
-            with st.sidebar:
-                st.markdown(f"#### ✏️ Modifica #{vino_m['id']}")
-                if form_vino(tid, tipo, vino_m):
-                    st.session_state.id_modifica = None
-                    st.success("Salvato!")
-                    st.rerun()
-                if st.button("✖ Annulla", use_container_width=True, type="secondary"):
-                    st.session_state.id_modifica = None
-                    st.rerun()
-            st.info(f"Stai modificando: **{vino_m['nome']}** (ID #{vino_m['id']})")
+            st.markdown(f"""
+            <div style="background:#1E1E1E;border:1px solid {PRIMARY};border-radius:12px;
+                        padding:20px;margin-bottom:20px;">
+                <div style="font-size:1em;font-weight:600;color:{ACCENT};margin-bottom:12px;"
+                >✏️ Modifica: {vino_m['nome']}</div>
+            """, unsafe_allow_html=True)
+            if form_vino(tid, tipo, vino_m):
+                st.session_state.id_modifica = None
+                st.success("✅ Salvato!")
+                st.rerun()
+            col_ann, _ = st.columns([1,3])
+            if col_ann.button("✖ Chiudi", use_container_width=True, type="secondary"):
+                st.session_state.id_modifica = None
+                st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
 
     # Lista filtrata
     vini_f = []
