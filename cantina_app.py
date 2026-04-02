@@ -35,9 +35,20 @@ CSS = f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-/* ── TESTO GLOBALE ── */
-p, span, div, label, li,
-.stMarkdown p, .stMarkdown span, .stMarkdown div,
+/* ── SFONDO GLOBALE ── */
+html, body {{
+    background-color: {BG_DARK} !important;
+    font-family: 'Inter', sans-serif !important;
+    color: {TEXT_MAIN} !important;
+}}
+.stApp, [data-testid="stAppViewContainer"],
+[data-testid="stMain"], [data-testid="block-container"] {{
+    background-color: {BG_DARK} !important;
+}}
+
+/* ── TESTO GLOBALE — solo tag semantici, NO div generico ── */
+p, h1, h2, h3, h4, h5, h6, li, span, label,
+.stMarkdown p, .stMarkdown span,
 [data-testid="stMarkdownContainer"] p,
 [data-testid="stMarkdownContainer"] span {{ color: {TEXT_MAIN} !important; }}
 
