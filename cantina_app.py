@@ -791,12 +791,15 @@ def grid_vini(tenant, tipo="vini"):
 
     # Filtri
     with st.expander("🔍 Filtri e ricerca", expanded=False):
-        fc1,fc2,fc3 = st.columns(3)
+        fc1,fc2 = st.columns(2)
         txt = fc1.text_input("Cerca", "").lower()
         luoghi = sorted(set(v.get("luogo","") for v in data if v.get("luogo")))
         luogo_f = fc2.selectbox("Sede", ["TUTTE"] + luoghi)
+        fc3,fc4 = st.columns(2)
         cats = list(dict.fromkeys(CATEGORIE_BASE + [v.get("tipo_cat","") for v in data if v.get("tipo_cat") not in CATEGORIE_BASE]))
         cat_f = fc3.selectbox("Categoria", ["TUTTI"] + cats)
+        formati = sorted(set(v.get("formato","") for v in data if v.get("formato")))
+        fmt_f = fc4.selectbox("🍾 Formato", ["TUTTI"] + formati)
 
     # Aggiungi nuovo
     with st.expander("➕ Aggiungi nuovo vino", expanded=False):
@@ -826,6 +829,7 @@ def grid_vini(tenant, tipo="vini"):
     for v in reversed(data):
         if txt and not any(txt in str(val).lower() for val in v.values()): continue
         if luogo_f != "TUTTE" and v.get("luogo") != luogo_f: continue
+        if fmt_f != "TUTTI" and v.get("formato","") != fmt_f: continue
         q = to_int(v.get("qta",0))
         if cat_f == "TUTTI":
             if q <= 0: continue
