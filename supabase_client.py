@@ -28,6 +28,12 @@ def verify_login(email: str, password: str) -> dict | None:
     resp = sb.table("tenants").select("*").eq("email", email).eq("password_hash", pw_hash).eq("attivo", True).execute()
     return resp.data[0] if resp.data else None
 
+def email_exists(email: str) -> bool:
+    """Controlla se una email è già registrata."""
+    sb = init_supabase()
+    resp = sb.table("tenants").select("id").eq("email", email).execute()
+    return len(resp.data) > 0
+
 # ── Tenants (clienti) ─────────────────────────────────────────────────────────
 
 def get_all_tenants() -> list[dict]:

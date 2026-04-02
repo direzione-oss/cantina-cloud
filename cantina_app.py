@@ -5,7 +5,9 @@ Piattaforma multi-tenant per la gestione di cantine vino.
 Ruoli: superadmin | admin (cliente) | portale pubblico
 """
 import streamlit as st
-import os, random, base64, datetime, hashlib
+import os, random, base64, datetime, hashlib, re, smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from io import BytesIO
 from fpdf import FPDF
 from PIL import Image
@@ -321,6 +323,67 @@ if portale_slug:
 # LOGIN
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _invia_email_notifica(nome: str, email: str, piano: str):
+    """Invia email di notifica a direzione@serrastudio.it per ogni nuova registrazione."""
+    try:
+        smtp_host = st.secrets.get("SMTP_HOST", "")
+        smtp_port = int(st.secrets.get("SMTP_PORT", 587))
+        smtp_user = st.secrets.get("SMTP_USER", "")
+        smtp_pass = st.secrets.get("SMTP_PASS", "")
+        if not smtp_host or not smtp_user:
+            return  # SMTP non configurato, skip silenzioso
+
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"🍷 Nuova registrazione CantinaPro: {nome}"
+        msg["From"]    = smtp_user
+        msg["To"]      = "direzione@serrastudio.it"
+
+        oggi = datetime.date.today()
+        scadenza = oggi + datetime.timedelta(days=14)
+        corpo = f"""\
+<html><body style="font-family:Arial,sans-serif;color:#333;">
+<h2 style="color:#8B1A1A;">🍷 Nuova registrazione CantinaPro</h2>
+<table style="border-collapse:collapse;width:100%;">
+  <tr><td style="padding:8px;font-weight:bold;">Nome cantina</td><td style="padding:8px;">{nome}</td></tr>
+  <tr style="background:#f9f9f9;"><td style="padding:8px;font-weight:bold;">Email</td><td style="padding:8px;">{email}</td></tr>
+  <tr><td style="padding:8px;font-weight:bold;">Piano</td><td style="padding:8px;">{piano}</td></tr>
+  <tr style="background:#f9f9f9;"><td style="padding:8px;font-weight:bold;">Data registrazione</td><td style="padding:8px;">{oggi.strftime('%d/%m/%Y')}</td></tr>
+  <tr><td style="padding:8px;font-weight:bold;">Scadenza trial</td><td style="padding:8px;color:#8B1A1A;"><b>{scadenza.strftime('%d/%m/%Y')}</b></td></tr>
+</table>
+<p style="margin-top:20px;color:#666;font-size:0.9em;">Accedi al pannello superadmin per gestire questo cliente.</p>
+</body></html>"""
+        msg.attach(MIMEText(corpo, "html"))
+
+        with smtplib.SMTP(smtp_host, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.sendmail(smtp_user, "direzione@serrastudio.it", msg.as_string())
+    except Exception:
+        pass  # Non bloccare la registrazione se email fallisce
+
+
+def _banner_trial(user: dict):
+    """Mostra banner se l'account è in periodo di trial."""
+    if user.get("piano") != "trial":
+        return
+    note = user.get("note_admin", "")
+    try:
+        scad_str = next((p.split(":",1)[1] for p in note.split("|") if p.startswith("TRIAL_UNTIL")), None)
+        if not scad_str:
+            return
+        scad = datetime.date.fromisoformat(scad_str.strip())
+        rimasti = (scad - datetime.date.today()).days
+        if rimasti < 0:
+            st.error("⚠️ Il tuo periodo di prova è scaduto. Contatta direzione@serrastudio.it per attivare un piano.")
+            st.stop()
+        elif rimasti <= 3:
+            st.warning(f"⏳ Il tuo periodo di prova scade tra **{rimasti} giorn{'o' if rimasti==1 else 'i'}**. Contattaci per continuare!")
+        else:
+            st.info(f"🌟 Stai usando CantinaPro in **prova gratuita** — scade il {scad.strftime('%d/%m/%Y')} ({rimasti} giorni rimasti).")
+    except Exception:
+        pass
+
+
 def show_login():
     _, col, _ = st.columns([1, 1.2, 1])
     with col:
@@ -328,33 +391,92 @@ def show_login():
         <div style="text-align:center;padding:40px 0 20px;">
             <div style="font-size:3em;margin-bottom:8px;">🍷</div>
             <div style="font-size:1.8em;font-weight:700;color:{TEXT_MAIN};">CantinaPro</div>
-            <div style="color:{TEXT_MUTED};font-size:0.9em;margin-top:4px;">Gestionale Cantine</div>
+            <div style="color:{TEXT_MUTED};font-size:0.9em;margin-top:4px;">Gestionale Cantine · Prova 14 giorni gratis</div>
         </div>
-        <div style="background:{CARD_BG};border:1px solid #222;border-radius:16px;padding:32px;">
         """, unsafe_allow_html=True)
 
-        with st.form("login_form"):
-            st.markdown(f"<div style='font-weight:600;font-size:1.1em;margin-bottom:20px;'>Accedi al tuo account</div>", unsafe_allow_html=True)
-            email = st.text_input("Email", placeholder="nome@email.com")
-            password = st.text_input("Password", type="password", placeholder="••••••••")
-            submitted = st.form_submit_button("ACCEDI", use_container_width=True, type="primary")
+        tab_login, tab_reg = st.tabs(["  🔑 Accedi  ", "  ✨ Crea la tua cantina  "])
 
-        if submitted:
-            if not email or not password:
-                st.error("Inserisci email e password.")
-            else:
-                user = db.verify_login(email.strip().lower(), password)
-                if user:
-                    st.session_state.logged_in = True
-                    st.session_state.user = user
-                    st.session_state.ruolo = user.get("ruolo", "admin")
-                    st.session_state.page = "dashboard"
-                    st.rerun()
+        # ── TAB LOGIN ──────────────────────────────────────────────────────────
+        with tab_login:
+            st.markdown(f"<div style='background:{CARD_BG};border:1px solid #222;border-radius:16px;padding:28px;margin-top:12px;'>", unsafe_allow_html=True)
+            with st.form("login_form"):
+                st.markdown("<div style='font-weight:600;font-size:1em;margin-bottom:16px;'>Accedi al tuo account</div>", unsafe_allow_html=True)
+                email_l = st.text_input("Email", placeholder="nome@email.com", key="login_email")
+                pwd_l   = st.text_input("Password", type="password", placeholder="••••••••", key="login_pwd")
+                sub_l   = st.form_submit_button("🔓 ACCEDI", use_container_width=True, type="primary")
+            if sub_l:
+                if not email_l or not pwd_l:
+                    st.error("Inserisci email e password.")
                 else:
-                    st.error("Credenziali non valide o account disattivato.")
+                    user = db.verify_login(email_l.strip().lower(), pwd_l)
+                    if user:
+                        st.session_state.logged_in = True
+                        st.session_state.user      = user
+                        st.session_state.ruolo     = user.get("ruolo", "admin")
+                        st.session_state.page      = "dashboard"
+                        st.rerun()
+                    else:
+                        st.error("Credenziali non valide o account disattivato.")
+            st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown("</div>", unsafe_allow_html=True)
-        st.markdown(f"<div style='text-align:center;margin-top:20px;color:{TEXT_MUTED};font-size:0.8em;'>CantinaPro Platform · Accesso riservato</div>", unsafe_allow_html=True)
+        # ── TAB REGISTRAZIONE ──────────────────────────────────────────────────
+        with tab_reg:
+            st.markdown(f"""
+            <div style='background:{CARD_BG};border:1px solid {PRIMARY};border-radius:16px;padding:28px;margin-top:12px;'>
+            <div style='font-weight:600;font-size:1em;margin-bottom:4px;color:{ACCENT};'>✨ Inizia gratis — 14 giorni di prova</div>
+            <div style='font-size:0.82em;color:{TEXT_MUTED};margin-bottom:16px;'>Nessuna carta di credito richiesta. Accesso immediato.</div>
+            """, unsafe_allow_html=True)
+
+            with st.form("reg_form"):
+                nome_c = st.text_input("🍷 Nome della tua cantina", placeholder="Es. Cantina Rossi", key="reg_nome")
+                email_r = st.text_input("📧 Email", placeholder="nome@email.com", key="reg_email")
+                pwd_r   = st.text_input("🔒 Password", type="password", placeholder="Min. 8 caratteri", key="reg_pwd")
+                pwd_r2  = st.text_input("🔒 Conferma password", type="password", placeholder="Ripeti password", key="reg_pwd2")
+                terms   = st.checkbox("Accetto i termini di servizio e la privacy policy")
+                sub_r   = st.form_submit_button("🚀 Crea la mia cantina", use_container_width=True, type="primary")
+
+            if sub_r:
+                # Validazioni
+                err = []
+                if not nome_c.strip():  err.append("Inserisci il nome della cantina.")
+                if not re.match(r'^[^@]+@[^@]+\.[^@]+$', email_r.strip()): err.append("Email non valida.")
+                if len(pwd_r) < 8:      err.append("La password deve avere almeno 8 caratteri.")
+                if pwd_r != pwd_r2:     err.append("Le password non coincidono.")
+                if not terms:           err.append("Devi accettare i termini di servizio.")
+
+                if err:
+                    for e in err: st.error(e)
+                elif db.email_exists(email_r.strip().lower()):
+                    st.error("⚠️ Questa email è già registrata. Accedi con le tue credenziali.")
+                else:
+                    # Crea slug univoco
+                    slug_base = re.sub(r'[^a-z0-9]', '-', nome_c.strip().lower())[:30]
+                    slug = f"{slug_base}-{random.randint(1000,9999)}"
+                    scadenza = (datetime.date.today() + datetime.timedelta(days=14)).isoformat()
+
+                    nuovo_tenant = db.create_tenant({
+                        "nome": nome_c.strip(),
+                        "email": email_r.strip().lower(),
+                        "password": pwd_r,
+                        "ruolo": "admin",
+                        "piano": "trial",
+                        "attivo": True,
+                        "portale_slug": slug,
+                        "portale_attivo": False,
+                        "note_admin": f"TRIAL_UNTIL:{scadenza}|Registrazione autonoma",
+                    })
+
+                    if nuovo_tenant:
+                        _invia_email_notifica(nome_c.strip(), email_r.strip(), "Trial 14 giorni")
+                        st.success("✅ Cantina creata! Accedi ora con le tue credenziali.")
+                        st.balloons()
+                    else:
+                        st.error("❌ Errore durante la registrazione. Riprova o contatta il supporto.")
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown(f"<div style='text-align:center;margin-top:20px;color:{TEXT_MUTED};font-size:0.78em;'>CantinaPro Platform · &copy; 2025 SerraStudio</div>", unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # UTILITY
@@ -1035,7 +1157,8 @@ elif ruolo == "superadmin":
     else: page_superadmin_dashboard()
 
 else:
-    # Admin normale
+    # Admin normale — verifica trial
+    _banner_trial(user)
     sidebar_admin(user)
     page = st.session_state.page
     if page == "dashboard":     page_admin_dashboard(user)
