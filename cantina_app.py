@@ -35,27 +35,67 @@ CSS = f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-html, body, [data-testid="stAppViewContainer"], .stApp {{
+/* ── TESTO GLOBALE ── */
+p, span, div, label, li,
+.stMarkdown p, .stMarkdown span, .stMarkdown div,
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] span {{ color: {TEXT_MAIN} !important; }}
+
+/* ── LABEL FORM ── */
+[data-testid="stTextInput"] label,
+[data-testid="stTextArea"] label,
+[data-testid="stNumberInput"] label,
+[data-testid="stSelectbox"] label,
+[data-testid="stFileUploader"] label,
+[data-testid="stCheckbox"] label,
+[data-testid="stForm"] label,
+.stTextInput label, .stTextArea label, .stSelectbox label, .stNumberInput label {{
+    color: {TEXT_MAIN} !important; font-weight: 500 !important; opacity: 1 !important;
+}}
+[data-testid="stCheckbox"] label span {{ color: {TEXT_MAIN} !important; }}
+
+/* ── INPUT FIELDS ── */
+div[data-baseweb="input"], div[data-baseweb="textarea"] {{
+    background-color: #252525 !important; border-radius: 8px !important;
+}}
+div[data-baseweb="input"] input,
+div[data-baseweb="textarea"] textarea {{
+    background-color: #252525 !important; border: 1px solid #3A3A3A !important;
+    color: {TEXT_MAIN} !important; border-radius: 8px !important;
     font-family: 'Inter', sans-serif !important;
-    background-color: {BG_DARK} !important;
-    color: {TEXT_MAIN} !important;
+}}
+div[data-baseweb="input"] input::placeholder,
+div[data-baseweb="textarea"] textarea::placeholder {{ color: #666 !important; }}
+div[data-baseweb="input"] input:focus {{ border-color: {ACCENT} !important; }}
+[data-testid="stNumberInput"] input {{
+    background-color: #252525 !important; color: {TEXT_MAIN} !important;
+    border: 1px solid #3A3A3A !important;
 }}
 
-/* Sidebar */
-[data-testid="stSidebar"] {{
-    background-color: {SIDEBAR_BG} !important;
-    border-right: 1px solid #222 !important;
+/* ── SELECTBOX ── */
+div[data-baseweb="select"] > div, div[data-baseweb="select"] {{
+    background-color: #252525 !important; border-color: #3A3A3A !important;
+    color: {TEXT_MAIN} !important; border-radius: 8px !important;
 }}
+div[data-baseweb="select"] span, div[data-baseweb="select"] div {{
+    color: {TEXT_MAIN} !important; background-color: transparent !important;
+}}
+[data-baseweb="menu"] li, ul[data-testid="stSelectboxVirtualDropdown"] li {{
+    background-color: #1A1A1A !important; color: {TEXT_MAIN} !important;
+}}
+[data-baseweb="menu"] li:hover {{ background-color: {PRIMARY}44 !important; }}
+
+/* ── SIDEBAR ── */
+[data-testid="stSidebar"] {{ background-color: {SIDEBAR_BG} !important; border-right: 1px solid #222 !important; }}
 [data-testid="stSidebar"] * {{ color: {TEXT_MAIN} !important; }}
+[data-testid="stSidebar"] input {{ background-color: #252525 !important; color: {TEXT_MAIN} !important; }}
 
-/* Pulsanti principali */
+/* ── PULSANTI ── */
 div.stButton > button {{
     background: linear-gradient(135deg, {PRIMARY}, #6B1414) !important;
-    color: white !important; border: none !important;
-    border-radius: 8px !important; font-weight: 600 !important;
-    font-family: 'Inter', sans-serif !important;
-    transition: all 0.2s ease !important;
-    box-shadow: 0 2px 8px rgba(139,26,26,0.3) !important;
+    color: white !important; border: none !important; border-radius: 8px !important;
+    font-weight: 600 !important; font-family: 'Inter', sans-serif !important;
+    transition: all 0.2s ease !important; box-shadow: 0 2px 8px rgba(139,26,26,0.3) !important;
 }}
 div.stButton > button:hover {{
     transform: translateY(-1px) !important;
@@ -63,50 +103,55 @@ div.stButton > button:hover {{
     background: linear-gradient(135deg, #a32020, {PRIMARY}) !important;
 }}
 div.stButton > button[kind="secondary"] {{
-    background: #1E1E1E !important;
-    border: 1px solid #333 !important;
-    box-shadow: none !important;
+    background: #252525 !important; border: 1px solid #3A3A3A !important;
+    color: {TEXT_MAIN} !important; box-shadow: none !important;
 }}
 div.stButton > button[kind="secondary"]:hover {{
-    border-color: {ACCENT} !important; color: {ACCENT} !important;
-    transform: none !important;
+    border-color: {ACCENT} !important; color: {ACCENT} !important; transform: none !important;
 }}
 
-/* Input fields */
-div[data-baseweb="input"] input,
-div[data-baseweb="textarea"] textarea,
-div[data-baseweb="select"] {{
-    background-color: #1E1E1E !important;
-    border-color: #333 !important; color: {TEXT_MAIN} !important;
-    border-radius: 8px !important;
-}}
-div[data-baseweb="input"] input:focus {{ border-color: {ACCENT} !important; }}
-
-/* Metriche */
+/* ── METRICHE ── */
 [data-testid="stMetric"] {{
-    background: {CARD_BG}; border-radius: 12px;
-    padding: 16px; border: 1px solid #222;
-    border-top: 3px solid {PRIMARY};
+    background: {CARD_BG}; border-radius: 12px; padding: 16px;
+    border: 1px solid #2A2A2A; border-top: 3px solid {PRIMARY};
 }}
 [data-testid="stMetricValue"] {{ color: {ACCENT} !important; font-weight: 700 !important; }}
+[data-testid="stMetricLabel"] p {{ color: #AAAAAA !important; font-size: 0.82em !important; }}
 
-/* Tabs */
+/* ── TABS ── */
 [data-testid="stTabs"] button {{
-    background: transparent !important; color: {TEXT_MUTED} !important;
+    background: transparent !important; color: #AAAAAA !important;
     border-bottom: 2px solid transparent !important;
     box-shadow: none !important; border-radius: 0 !important;
-    padding: 8px 16px !important;
+    padding: 8px 16px !important; font-weight: 500 !important;
 }}
 [data-testid="stTabs"] button[aria-selected="true"] {{
-    color: {ACCENT} !important;
-    border-bottom-color: {ACCENT} !important;
+    color: {ACCENT} !important; border-bottom-color: {ACCENT} !important;
 }}
 
-/* Card vino */
+/* ── EXPANDER ── */
+details summary {{ color: {TEXT_MAIN} !important; font-weight: 500 !important; }}
+[data-testid="stExpander"] {{
+    border-color: #2A2A2A !important; background: {CARD_BG} !important; border-radius: 10px !important;
+}}
+[data-testid="stExpander"] summary p {{ color: {TEXT_MAIN} !important; }}
+
+/* ── CAPTION ── */
+[data-testid="stCaptionContainer"] p, .stCaption p {{ color: #888 !important; font-size: 0.8em !important; }}
+
+/* ── FILE UPLOADER ── */
+[data-testid="stFileUploader"] {{
+    background: #1E1E1E !important; border: 1px dashed #3A3A3A !important; border-radius: 8px !important;
+}}
+[data-testid="stFileUploader"] p, [data-testid="stFileUploader"] span {{ color: #AAAAAA !important; }}
+
+/* ── ALERT BOXES ── */
+[data-testid="stAlert"] p, [data-testid="stAlert"] div {{ color: {TEXT_MAIN} !important; }}
+
+/* ── CARD VINO ── */
 .wine-card {{
-    background: {CARD_BG}; border-radius: 14px;
-    border: 1px solid #252525; margin-bottom: 16px;
-    overflow: hidden; transition: all 0.2s ease;
+    background: {CARD_BG}; border-radius: 14px; border: 1px solid #252525;
+    margin-bottom: 16px; overflow: hidden; transition: all 0.2s ease;
     box-shadow: 0 4px 16px rgba(0,0,0,0.4);
 }}
 .wine-card:hover {{ border-color: {PRIMARY}; box-shadow: 0 6px 24px rgba(139,26,26,0.25); }}
@@ -121,59 +166,36 @@ div[data-baseweb="input"] input:focus {{ border-color: {ACCENT} !important; }}
     font-size: 0.72em; font-weight: 600; background: {PRIMARY}33;
     color: {ACCENT}; border: 1px solid {PRIMARY}44; margin-left: 6px;
 }}
-.stat-row {{
-    display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0;
-}}
+
+/* ── STAT BOX ── */
 .stat-box {{
     flex: 1; min-width: 140px; background: {CARD_BG};
-    border-radius: 10px; padding: 14px 16px; border: 1px solid #222;
-    border-left: 4px solid {PRIMARY};
+    border-radius: 10px; padding: 14px 16px;
+    border: 1px solid #222; border-left: 4px solid {PRIMARY};
 }}
 .stat-box .val {{ font-size: 1.6em; font-weight: 700; color: {ACCENT}; }}
-.stat-box .lbl {{ font-size: 0.78em; color: {TEXT_MUTED}; margin-top: 2px; }}
+.stat-box .lbl {{ font-size: 0.78em; color: #AAAAAA; margin-top: 2px; }}
 
-/* Sidebar nav button */
-.nav-btn {{
-    width: 100%; text-align: left; padding: 10px 14px;
-    border-radius: 8px; cursor: pointer; font-size: 0.9em;
-    font-weight: 500; transition: all 0.15s;
-    background: transparent; border: none; color: {TEXT_MAIN};
-    display: flex; align-items: center; gap: 10px;
-}}
-.nav-btn:hover {{ background: #1E1E1E; color: {ACCENT}; }}
-.nav-btn.active {{ background: {PRIMARY}22; color: {ACCENT}; border-left: 3px solid {PRIMARY}; }}
-
-/* Badge clienti */
+/* ── BADGE ── */
 .badge-attivo {{ background: #14532d33; color: #4ade80; padding: 2px 10px; border-radius: 20px; font-size: 0.75em; }}
 .badge-disattivo {{ background: #7f1d1d33; color: #f87171; padding: 2px 10px; border-radius: 20px; font-size: 0.75em; }}
 .badge-piano {{ background: {ACCENT}22; color: {ACCENT}; padding: 2px 10px; border-radius: 20px; font-size: 0.75em; }}
 
-/* Divisore elegante */
-hr {{ border-color: #222 !important; margin: 20px 0 !important; }}
-
-/* Selectbox */
-div[data-baseweb="select"] > div {{ background-color: #1E1E1E !important; border-color: #333 !important; }}
-
-/* Scrollbar */
+/* ── MISC ── */
+hr {{ border-color: #2A2A2A !important; margin: 20px 0 !important; }}
 ::-webkit-scrollbar {{ width: 6px; }}
 ::-webkit-scrollbar-track {{ background: {BG_DARK}; }}
-::-webkit-scrollbar-thumb {{ background: #333; border-radius: 3px; }}
+::-webkit-scrollbar-thumb {{ background: #3A3A3A; border-radius: 3px; }}
 ::-webkit-scrollbar-thumb:hover {{ background: {PRIMARY}; }}
 
-/* Expander */
-details summary {{ color: {TEXT_MAIN} !important; }}
-[data-testid="stExpander"] {{ border-color: #2A2A2A !important; background: {CARD_BG} !important; }}
-
-/* Portale pubblico */
+/* ── PORTALE ── */
 .portale-hero {{
     background: linear-gradient(135deg, {PRIMARY}, #3d0000);
-    padding: 60px 40px; text-align: center; border-radius: 0 0 30px 30px;
-    margin-bottom: 40px;
+    padding: 60px 40px; text-align: center; border-radius: 0 0 30px 30px; margin-bottom: 40px;
 }}
 .portale-wine-card {{
     background: white; border-radius: 12px; overflow: hidden;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.1); transition: transform 0.2s;
-    height: 100%;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1); transition: transform 0.2s; height: 100%;
 }}
 .portale-wine-card:hover {{ transform: translateY(-4px); }}
 </style>
