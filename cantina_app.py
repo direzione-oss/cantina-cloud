@@ -372,7 +372,7 @@ def genera_pdf_lista(lista, titolo):
         if fill: pdf.set_fill_color(245,240,240)
         for idx,txt in enumerate(row): pdf.cell(wws[idx],7,txt,1,0,"L",fill)
         pdf.ln()
-    return bytes(pdf.output(dest="S"))
+    return bytes(pdf.output())
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SIDEBAR NAVIGATION

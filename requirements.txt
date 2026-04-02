@@ -1,5 +1,5 @@
 streamlit
 supabase
 Pillow
-fpdf
+fpdf2
 qrcode
