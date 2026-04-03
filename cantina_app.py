@@ -1859,6 +1859,98 @@ def page_admin_settings(tenant):
             st.success("✅ Impostazioni salvate!")
             st.rerun()
 
+    st.markdown("---")
+
+    # ── GESTIONE SEDI ─────────────────────────────────────────────────
+    st.markdown(f"<h3 style='color:{ACCENT};'>📍 Gestione Sedi</h3>", unsafe_allow_html=True)
+
+    vini = db.get_vini(tid)
+    mignon = db.get_mignon(tid)
+    tutti = vini + mignon
+
+    # Raccogli tutte le sedi
+    sedi_set = sorted(set(
+        v.get("luogo", "") for v in tutti
+        if v.get("luogo") and v.get("luogo") != "None"
+    ))
+
+    if sedi_set:
+        for sede in sedi_set:
+            n_vini = len([v for v in tutti if v.get("luogo") == sede])
+            sc1, sc2, sc3 = st.columns([3, 1, 1])
+            with sc1:
+                st.markdown(f"""<div style="padding:8px 12px;background:#1a1a1a;border:1px solid #2a2a2a;
+                    border-radius:8px;margin-bottom:4px;">
+                    <span style="font-weight:600;color:#F0EDE8;">📍 {sede}</span>
+                    <span style="color:{TEXT_MUTED};font-size:0.8em;margin-left:8px;">
+                    ({n_vini} bottigli{"a" if n_vini==1 else "e"})</span>
+                </div>""", unsafe_allow_html=True)
+            with sc2:
+                if st.button("✏️ Rinomina", key=f"ren_{sede}", use_container_width=True):
+                    st.session_state.sede_rinomina = sede
+            with sc3:
+                if n_vini == 0:
+                    if st.button("🗑️ Elimina", key=f"del_{sede}", use_container_width=True):
+                        # Nessun vino — elimina (non serve azione DB, la sede esiste solo come valore)
+                        st.success(f"Sede '{sede}' rimossa (era già vuota).")
+                        st.rerun()
+                else:
+                    st.button("🗑️ Elimina", key=f"del_{sede}", use_container_width=True,
+                              disabled=True, help=f"Non puoi eliminare: {n_vini} bottiglie assegnate")
+
+        # Dialog rinomina
+        if st.session_state.get("sede_rinomina"):
+            old_name = st.session_state.sede_rinomina
+            st.markdown(f"**Rinomina sede:** `{old_name}`")
+            with st.form("form_rinomina_sede"):
+                new_name = st.text_input("Nuovo nome sede", value=old_name)
+                if st.form_submit_button("💾 Salva nuovo nome", type="primary"):
+                    if new_name and new_name.strip() and new_name.strip() != old_name:
+                        new_name = new_name.strip()
+                        count = 0
+                        for v in vini:
+                            if v.get("luogo") == old_name:
+                                db.update_vino(v["id"], {"luogo": new_name})
+                                count += 1
+                        for v in mignon:
+                            if v.get("luogo") == old_name:
+                                db.update_mignon(v["id"], {"luogo": new_name})
+                                count += 1
+                        st.session_state.sede_rinomina = None
+                        st.success(f"✅ Sede rinominata: '{old_name}' → '{new_name}' ({count} bottiglie aggiornate)")
+                        st.rerun()
+                    else:
+                        st.warning("Inserisci un nome diverso.")
+            if st.button("Annulla"):
+                st.session_state.sede_rinomina = None
+                st.rerun()
+    else:
+        st.info("Nessuna sede configurata. Aggiungi la prima!")
+
+    # Aggiungi nuova sede
+    st.markdown("---")
+    with st.form("form_nuova_sede"):
+        st.markdown("**➕ Aggiungi nuova sede**")
+        nuova_sede = st.text_input("Nome nuova sede", placeholder="es. Cantina, Frigo, Soggiorno...")
+        if st.form_submit_button("Aggiungi sede"):
+            if nuova_sede and nuova_sede.strip():
+                nuova_sede = nuova_sede.strip()
+                if nuova_sede in sedi_set:
+                    st.warning(f"La sede '{nuova_sede}' esiste già.")
+                else:
+                    # Crea un vino "segnaposto" con qta=0 per registrare la sede
+                    db.insert_vino(tid, {
+                        "nome": f"[Sede: {nuova_sede}]",
+                        "luogo": nuova_sede,
+                        "qta": 0,
+                        "tipo_cat": "Altro",
+                        "prezzo": 0
+                    })
+                    st.success(f"✅ Sede '{nuova_sede}' creata! Puoi assegnarle i vini.")
+                    st.rerun()
+            else:
+                st.warning("Inserisci un nome per la sede.")
+
 # ─────────────────────────────────────────────────────────────────────────────
 # ROUTER PRINCIPALE
 # ─────────────────────────────────────────────────────────────────────────────
