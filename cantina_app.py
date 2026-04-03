@@ -303,7 +303,7 @@ lista_luogo  = params.get("luogo", "")
 
 if lista_slug:
     import urllib.parse
-    tenant = db.get_tenant_by_slug(lista_slug)
+    tenant = db.get_tenant_by_slug_lista(lista_slug)
     if not tenant:
         st.error("Lista non trovata.")
         st.stop()

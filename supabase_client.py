@@ -70,6 +70,12 @@ def get_tenant_by_slug(slug: str) -> dict:
     resp = sb.table("tenants").select("*").eq("portale_slug", slug).eq("portale_attivo", True).execute()
     return resp.data[0] if resp.data else {}
 
+def get_tenant_by_slug_lista(slug: str) -> dict:
+    """Cerca tenant per slug senza richiedere portale_attivo (usato per lista ospiti QR)."""
+    sb = init_supabase()
+    resp = sb.table("tenants").select("*").eq("portale_slug", slug).eq("attivo", True).execute()
+    return resp.data[0] if resp.data else {}
+
 # ── Vini / Mignon (filtrati per tenant) ───────────────────────────────────────
 
 def get_vini(tenant_id: str) -> list[dict]:
