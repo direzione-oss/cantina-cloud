@@ -1114,38 +1114,81 @@ def page_admin_dashboard(tenant):
         for i, sede in enumerate(sedi):
             import qrcode, urllib.parse
             url_lista = f"https://cantina-cloud-gian.streamlit.app?lista={slug}&luogo={urllib.parse.quote(sede)}"
-            qr = qrcode.QRCode(version=1, box_size=6, border=2,
+            n_vini = len([v for v in vini if v.get("luogo")==sede and v.get("tipo_cat")!="Provati" and to_int(v.get("qta",0))>0])
+
+            # ── Genera QR ──────────────────────────────────────────────
+            qr = qrcode.QRCode(version=1, box_size=8, border=2,
                                error_correction=qrcode.constants.ERROR_CORRECT_M)
             qr.add_data(url_lista)
             qr.make(fit=True)
-            img_qr = qr.make_image(fill_color="#8B1A1A", back_color="#1A1A1A")
+            img_qr = qr.make_image(fill_color="#8B1A1A", back_color="white")
+            qr_w, qr_h = img_qr.size
 
-            buf = BytesIO()
-            img_qr.save(buf, format="PNG")
-            buf.seek(0)
-            qr_b64 = base64.b64encode(buf.read()).decode()
+            # ── Componi immagine stampabile con PIL ────────────────────
+            card_w = qr_w + 60
+            card_h = qr_h + 200
+            card = Image.new("RGB", (card_w, card_h), color="#FFFFFF")
+            from PIL import ImageDraw, ImageFont
+            draw = ImageDraw.Draw(card)
 
-            vini_sede = [v for v in vini if v.get("luogo")==sede and v.get("tipo_cat")!="Provati" and to_int(v.get("qta",0))>0]
+            # Striscia bordeaux in alto
+            draw.rectangle([0, 0, card_w, 60], fill="#8B1A1A")
+            # Emoji vino (come testo)
+            draw.text((card_w//2, 30), "🍷", fill="white", anchor="mm")
+
+            # Nome cantina
+            nome_cantina = tenant.get("nome", "Cantina")
+            draw.rectangle([0, 60, card_w, 120], fill="#F9F4F4")
+            draw.text((card_w//2, 90), nome_cantina[:30], fill="#8B1A1A", anchor="mm")
+
+            # Sede
+            draw.text((card_w//2, 120), f"📍  {sede}", fill="#555555", anchor="mm")
+
+            # QR al centro
+            card.paste(img_qr, (30, 145))
+
+            # Testo istruzione sotto
+            y_txt = 145 + qr_h + 12
+            draw.rectangle([0, y_txt - 4, card_w, card_h], fill="#F9F4F4")
+            draw.text((card_w//2, y_txt + 10), "Scansiona per vedere la lista vini", fill="#8B1A1A", anchor="mm")
+            draw.text((card_w//2, y_txt + 28), f"{n_vini} etichette disponibili", fill="#999999", anchor="mm")
+
+            # Bordo arrotondato (effetto)
+            draw.rectangle([0, 0, card_w-1, card_h-1], outline="#CCCCCC", width=2)
+
+            # ── Salva immagine card ────────────────────────────────────
+            buf_card = BytesIO()
+            card.save(buf_card, format="PNG", dpi=(300, 300))
+            buf_card.seek(0)
+            card_b64 = base64.b64encode(buf_card.read()).decode()
+
+            # Anteprima nel dashboard (piccola)
+            buf_preview = BytesIO()
+            card.thumbnail((200, 300))
+            card.save(buf_preview, format="PNG")
+            buf_preview.seek(0)
+            prev_b64 = base64.b64encode(buf_preview.read()).decode()
 
             with qr_cols[i % 4]:
-                st.markdown(f"""
-                <div style="background:#1A1A1A;border:1px solid #2A2A2A;border-radius:12px;
-                            padding:16px;text-align:center;margin-bottom:8px;">
-                    <img src="data:image/png;base64,{qr_b64}"
-                         style="width:140px;height:140px;border-radius:8px;" />
-                    <div style="font-size:0.85em;font-weight:600;color:{ACCENT};margin-top:10px;">{sede}</div>
-                    <div style="font-size:0.72em;color:#666;margin-top:2px;">{len(vini_sede)} vini disponibili</div>
-                </div>
-                """, unsafe_allow_html=True)
-                buf.seek(0)
+                st.markdown(f'<img src="data:image/png;base64,{prev_b64}" style="width:100%;border-radius:8px;margin-bottom:8px;border:1px solid #2A2A2A;"/>', unsafe_allow_html=True)
+                buf_card.seek(0)
                 st.download_button(
-                    label=f"💾 QR {sede}",
-                    data=buf,
-                    file_name=f"qr_{sede.lower().replace(' ','_')}.png",
+                    label=f"🖨️ Scarica card {sede}",
+                    data=buf_card,
+                    file_name=f"lista_qr_{sede.lower().replace(' ','_')}.png",
                     mime="image/png",
                     use_container_width=True,
                     key=f"qr_dl_{i}"
                 )
+                # Link condivisibile
+                st.markdown(
+                    f'<a href="https://wa.me/?text={urllib.parse.quote(f"Lista vini {tenant.get(chr(39)+str(nome_cantina)+chr(39),sede)}: {url_lista}")}" '
+                    f'target="_blank" style="display:block;text-align:center;font-size:0.78em;'
+                    f'color:#25D366;margin-top:4px;text-decoration:none;">📤 Invia via WhatsApp</a>',
+                    unsafe_allow_html=True
+                )
+                st.code(url_lista, language=None)
+
 
     st.markdown("---")
 
