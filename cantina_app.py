@@ -1384,9 +1384,17 @@ def page_admin_dashboard(tenant):
 
     st.markdown("---")
 
-    # ── PDF Downloads ──────────────────────────────────────────────────
+    # ── PDF Downloads (HTML links: st.download_button causa None) ──
     giacenza = [v for v in vini if to_int(v.get("qta",0))>0 and v.get("tipo_cat")!="Provati"]
     nome_f   = tenant.get("nome","cantina").lower().replace(" ","_")
+
+    def _pdf_link(label, data_bytes, filename, bg=PRIMARY, tc="white"):
+        b64 = base64.b64encode(data_bytes).decode()
+        return (f'<a href="data:application/pdf;base64,{b64}" download="{filename}"'
+                f' style="display:block;text-align:center;padding:10px 6px;'
+                f'background:{bg};color:{tc};border:1px solid #555;border-radius:8px;'
+                f'text-decoration:none;font-weight:600;font-family:Inter,sans-serif;'
+                f'font-size:0.88em;margin:4px 0;">{label}</a>')
 
     col1, col2, col3 = st.columns(3)
 
@@ -1394,15 +1402,15 @@ def page_admin_dashboard(tenant):
         if giacenza:
             try:
                 _b = genera_pdf_lista(giacenza, f"Giacenza - {tenant['nome']}")
-                st.download_button("📄 Lista PDF", data=_b,
-                                   file_name="cantina.pdf", mime="application/pdf",
-                                   use_container_width=True, key="dl_lista")
+                st.markdown(_pdf_link("Scarica Lista PDF", _b, "cantina.pdf",
+                                      bg="#252525", tc=ACCENT),
+                            unsafe_allow_html=True)
             except Exception as e:
                 st.error(f"Errore PDF lista: {e}")
 
     with col2:
         if sedi:
-            sede_sel = st.selectbox("📍 Sede", sedi, key="sede_divisa_sel",
+            sede_sel = st.selectbox("Sede", sedi, key="sede_divisa_sel",
                                     label_visibility="collapsed")
             vini_sede = [v for v in vini if v.get("luogo")==sede_sel
                          and v.get("tipo_cat")!="Provati"
@@ -1410,10 +1418,10 @@ def page_admin_dashboard(tenant):
             if vini_sede:
                 try:
                     _b2 = genera_pdf_lista(vini_sede, f"Lista - {sede_sel} ({tenant['nome']})")
-                    st.download_button(f"📝 Divisa {sede_sel}", data=_b2,
-                                       file_name=f"divisa_{sede_sel.lower().replace(' ','_')}.pdf",
-                                       mime="application/pdf",
-                                       use_container_width=True, key="dl_divisa")
+                    fn2 = f"divisa_{sede_sel.lower().replace(' ','_')}.pdf"
+                    st.markdown(_pdf_link(f"Divisa {sede_sel}", _b2, fn2,
+                                         bg="#252525", tc=ACCENT),
+                                unsafe_allow_html=True)
                 except Exception as e:
                     st.error(f"Errore PDF divisa: {e}")
 
@@ -1421,14 +1429,10 @@ def page_admin_dashboard(tenant):
         if giacenza:
             try:
                 _b3 = genera_pdf_catalogo(giacenza, tenant.get("nome","Cantina"))
-                st.download_button("📚 Catalogo PDF completo", data=_b3,
-                                   file_name=f"catalogo_{nome_f}.pdf",
-                                   mime="application/pdf",
-                                   use_container_width=True, type="primary",
-                                   key="dl_cat")
+                st.markdown(_pdf_link("Catalogo PDF completo", _b3, f"catalogo_{nome_f}.pdf"),
+                            unsafe_allow_html=True)
             except Exception as e:
                 st.error(f"Errore PDF catalogo: {e}")
-
     st.markdown("---")
 
     # ── QR CODE PER SEDE ─────────────────────────────────────────────
