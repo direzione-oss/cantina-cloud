@@ -1367,6 +1367,44 @@ def page_admin_dashboard(tenant):
 
     st.markdown("---")
 
+    # ── PDF: chiamate dirette, no cache, no session_state ────────────
+    giacenza = [v for v in vini if to_int(v.get("qta",0))>0 and v.get("tipo_cat")!="Provati"]
+    nome_f   = tenant.get("nome","cantina").lower().replace(" ","_")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        if giacenza:
+            _b = genera_pdf_lista(giacenza, f"Giacenza - {tenant['nome']}")
+            st.download_button("📄 Lista PDF", data=_b,
+                               file_name="cantina.pdf", mime="application/pdf",
+                               use_container_width=True, key="dl_lista")
+
+    with col2:
+        if sedi:
+            sede_sel = st.selectbox("📍 Sede", sedi, key="sede_divisa_sel",
+                                    label_visibility="collapsed")
+            vini_sede = [v for v in vini if v.get("luogo")==sede_sel
+                         and v.get("tipo_cat")!="Provati"
+                         and to_int(v.get("qta",0))>0]
+            if vini_sede:
+                _b2 = genera_pdf_lista(vini_sede, f"Lista - {sede_sel} ({tenant['nome']})")
+                st.download_button(f"📝 Divisa {sede_sel}", data=_b2,
+                                   file_name=f"divisa_{sede_sel.lower().replace(' ','_')}.pdf",
+                                   mime="application/pdf",
+                                   use_container_width=True, key="dl_divisa")
+
+    with col3:
+        if giacenza:
+            _b3 = genera_pdf_catalogo(giacenza, tenant.get("nome","Cantina"))
+            st.download_button("📚 Catalogo PDF completo", data=_b3,
+                               file_name=f"catalogo_{nome_f}.pdf",
+                               mime="application/pdf",
+                               use_container_width=True, type="primary",
+                               key="dl_cat")
+
+    st.markdown("---")
+
     # ── QR CODE PER SEDE ─────────────────────────────────────────────
     slug = tenant.get("portale_slug", "")
     if sedi and slug:
@@ -1419,7 +1457,7 @@ def page_admin_dashboard(tenant):
                 st.markdown(f'<img src="data:image/png;base64,{prev_b64}" style="width:100%;border-radius:8px;margin-bottom:8px;border:1px solid #2A2A2A;"/>', unsafe_allow_html=True)
                 buf_card.seek(0)
                 st.download_button(
-                    label=f"🖨️ Scarica card {sede}",
+                    label=f"Scarica card {sede}",
                     data=buf_card,
                     file_name=f"lista_qr_{sede.lower().replace(' ','_')}.png",
                     mime="image/png",
@@ -1442,44 +1480,6 @@ def page_admin_dashboard(tenant):
                     f'🔗 {url_lista}</a></div>',
                     unsafe_allow_html=True
                 )
-
-    st.markdown("---")
-
-    # ── PDF: chiamate dirette, no cache, no session_state ────────────
-    giacenza = [v for v in vini if to_int(v.get("qta",0))>0 and v.get("tipo_cat")!="Provati"]
-    nome_f   = tenant.get("nome","cantina").lower().replace(" ","_")
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        if giacenza:
-            _b = genera_pdf_lista(giacenza, f"Giacenza - {tenant['nome']}")
-            st.download_button("📄 Lista PDF", data=_b,
-                               file_name="cantina.pdf", mime="application/pdf",
-                               use_container_width=True, key="dl_lista")
-
-    with col2:
-        if sedi:
-            sede_sel = st.selectbox("📍 Sede", sedi, key="sede_divisa_sel",
-                                    label_visibility="collapsed")
-            vini_sede = [v for v in vini if v.get("luogo")==sede_sel
-                         and v.get("tipo_cat")!="Provati"
-                         and to_int(v.get("qta",0))>0]
-            if vini_sede:
-                _b2 = genera_pdf_lista(vini_sede, f"Lista - {sede_sel} ({tenant['nome']})")
-                st.download_button(f"📝 Divisa {sede_sel}", data=_b2,
-                                   file_name=f"divisa_{sede_sel.lower().replace(' ','_')}.pdf",
-                                   mime="application/pdf",
-                                   use_container_width=True, key="dl_divisa")
-
-    with col3:
-        if giacenza:
-            _b3 = genera_pdf_catalogo(giacenza, tenant.get("nome","Cantina"))
-            st.download_button("📚 Catalogo PDF completo", data=_b3,
-                               file_name=f"catalogo_{nome_f}.pdf",
-                               mime="application/pdf",
-                               use_container_width=True, type="primary",
-                               key="dl_cat")
 
 
 def grid_vini(tenant, tipo="vini"):
