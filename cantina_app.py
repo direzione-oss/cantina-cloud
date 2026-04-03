@@ -428,13 +428,22 @@ if lista_slug:
             </div>
             """, unsafe_allow_html=True)
 
-    st.markdown(f"""
-    <div class="footer-lista">
-        Lista aggiornata in tempo reale &nbsp;·&nbsp;
-        <span style="color:#8B1A1A;">CantinaPro</span>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        '<div style="border-top:1px solid #2a1a1a;margin-top:24px;padding:32px 20px 20px;text-align:center;">'
+        f'<div style="font-family:Playfair Display,serif;font-size:1em;color:#C9A84C;margin-bottom:6px;">'
+        f'Desideri gestire la tua cantina digitale?</div>'
+        f'<a href="https://cantina-cloud-gian.streamlit.app/" target="_blank" '
+        f'style="display:inline-block;background:#8B1A1A;color:white;text-decoration:none;'
+        f'padding:10px 28px;border-radius:8px;font-size:0.88em;font-weight:600;margin:8px 0;'
+        f'letter-spacing:0.5px;">🍷 Scopri CantinaPro</a>'
+        f'<div style="font-size:0.72em;color:#444;margin-top:16px;">'
+        f'Lista aggiornata in tempo reale &nbsp;·&nbsp; '
+        f'<span style="color:#8B1A1A;">CantinaPro</span></div>'
+        '</div>',
+        unsafe_allow_html=True
+    )
     st.stop()
+
 
 if portale_slug:
     tenant = db.get_tenant_by_slug(portale_slug)
@@ -1181,13 +1190,23 @@ def page_admin_dashboard(tenant):
                     key=f"qr_dl_{i}"
                 )
                 # Link condivisibile
+                nome_cantina = tenant.get("nome", sede)
+                wa_msg = urllib.parse.quote(f"Lista vini {nome_cantina} — {sede}: {url_lista}")
                 st.markdown(
-                    f'<a href="https://wa.me/?text={urllib.parse.quote(f"Lista vini {tenant.get(chr(39)+str(nome_cantina)+chr(39),sede)}: {url_lista}")}" '
-                    f'target="_blank" style="display:block;text-align:center;font-size:0.78em;'
-                    f'color:#25D366;margin-top:4px;text-decoration:none;">📤 Invia via WhatsApp</a>',
+                    f'<a href="https://wa.me/?text={wa_msg}" target="_blank" '
+                    f'style="display:block;text-align:center;font-size:0.82em;'
+                    f'color:#25D366;margin-top:6px;margin-bottom:4px;text-decoration:none;'
+                    f'font-weight:600;">📤 Invia via WhatsApp</a>',
                     unsafe_allow_html=True
                 )
-                st.code(url_lista, language=None)
+                st.markdown(
+                    f'<div style="background:#1a1a1a;border:1px solid #333;border-radius:6px;'
+                    f'padding:8px 10px;margin-top:2px;font-size:0.68em;color:#aaa;'
+                    f'word-break:break-all;text-align:center;">'
+                    f'<a href="{url_lista}" target="_blank" style="color:#C9A84C;text-decoration:none;">'
+                    f'🔗 {url_lista}</a></div>',
+                    unsafe_allow_html=True
+                )
 
 
     st.markdown("---")
