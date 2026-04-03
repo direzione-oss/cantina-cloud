@@ -103,39 +103,44 @@ div[data-baseweb="select"] span, div[data-baseweb="select"] div {{
 [data-testid="stSidebar"] * {{ color: {TEXT_MAIN} !important; }}
 [data-testid="stSidebar"] input {{ background-color: #252525 !important; color: {TEXT_MAIN} !important; }}
 
-/* ── PULSANTI ── */
-div.stButton > button {{
-    background: linear-gradient(135deg, {PRIMARY}, #6B1414) !important;
-    color: white !important; border: none !important; border-radius: 8px !important;
-    font-weight: 600 !important; font-family: 'Inter', sans-serif !important;
-    transition: all 0.2s ease !important;
-    box-shadow: 0 2px 8px rgba(139,26,26,0.3) !important;
-}}
-div.stButton > button:hover {{
-    transform: translateY(-1px) !important;
-    box-shadow: 0 4px 16px rgba(139,26,26,0.5) !important;
-    background: linear-gradient(135deg, #a32020, {PRIMARY}) !important;
-}}
-/* Secondary buttons: Streamlit usa data-testid nel DOM */
-[data-testid="baseButton-secondary"] {{
-    background: #2A2A2A !important;
-    border: 1px solid #4A4A4A !important;
+/* ── PULSANTI: approccio inverso — tutti scuri, poi primary bordeaux ── */
+/* Step 1: forza TUTTI i button a scuro di default */
+.stButton button,
+[data-testid^="baseButton"],
+[data-testid^="stBaseButton"] {{
+    background: #252525 !important;
+    border: 1px solid #444 !important;
     color: {TEXT_MAIN} !important;
-    box-shadow: none !important;
+    border-radius: 8px !important;
+    font-family: 'Inter', sans-serif !important;
     font-weight: 500 !important;
+    box-shadow: none !important;
+    transition: all 0.2s ease !important;
 }}
-[data-testid="baseButton-secondary"]:hover {{
+.stButton button:hover,
+[data-testid^="baseButton"]:hover,
+[data-testid^="stBaseButton"]:hover {{
+    background: #1E1E1E !important;
     border-color: {ACCENT} !important;
     color: {ACCENT} !important;
-    background: #1E1E1E !important;
     transform: none !important;
 }}
-/* Pulsanti emoji/icona piccoli (−, +, ✏️, ecc.) */
-[data-testid="baseButton-secondary"][data-size="small"],
-div.stButton > button[data-testid="baseButton-secondary"] {{
-    background: #2A2A2A !important;
-    border: 1px solid #3A3A3A !important;
-    color: {TEXT_MAIN} !important;
+/* Step 2: primary button — stile bordeaux */
+[data-testid="baseButton-primary"],
+[data-testid="stBaseButton-primary"] {{
+    background: linear-gradient(135deg, {PRIMARY}, #6B1414) !important;
+    border: none !important;
+    color: white !important;
+    font-weight: 600 !important;
+    box-shadow: 0 2px 8px rgba(139,26,26,0.3) !important;
+}}
+[data-testid="baseButton-primary"]:hover,
+[data-testid="stBaseButton-primary"]:hover {{
+    background: linear-gradient(135deg, #a32020, {PRIMARY}) !important;
+    border: none !important;
+    color: white !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 16px rgba(139,26,26,0.5) !important;
 }}
 
 /* ── METRICHE ── */
