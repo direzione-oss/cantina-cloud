@@ -1372,29 +1372,18 @@ def page_admin_dashboard(tenant):
 
     st.markdown("---")
 
-    # ── PDF Downloads (via HTML component — st.download_button e' rotto) ──
+    # ── PDF Downloads ──
     giacenza = [v for v in vini if to_int(v.get("qta",0))>0 and v.get("tipo_cat")!="Provati"]
     nome_f   = tenant.get("nome","cantina").lower().replace(" ","_")
-
-    import streamlit.components.v1 as components
-
-    def _dl_btn_html(label, data_bytes, filename, bg="#252525", tc=ACCENT, height=48):
-        """Crea un bottone download via componente HTML puro."""
-        b64 = base64.b64encode(data_bytes).decode()
-        html = f"""<a href="data:application/pdf;base64,{b64}" download="{filename}"
-            style="display:flex;align-items:center;justify-content:center;width:100%;
-            padding:10px 8px;background:{bg};color:{tc};border:1px solid #555;
-            border-radius:8px;text-decoration:none;font-weight:600;
-            font-family:Inter,sans-serif;font-size:0.88em;box-sizing:border-box;
-            cursor:pointer;">{label}</a>"""
-        components.html(html, height=height)
 
     pc1, pc2, pc3 = st.columns(3)
     with pc1:
         if giacenza:
             try:
                 _b = genera_pdf_lista(giacenza, f"Giacenza - {tenant['nome']}")
-                _dl_btn_html("Scarica Lista PDF", _b, "cantina.pdf")
+                st.download_button("Scarica Lista PDF", data=_b,
+                                   file_name="cantina.pdf", mime="application/pdf",
+                                   use_container_width=True, key="dl_lista")
             except Exception:
                 pass
     with pc2:
@@ -1407,16 +1396,21 @@ def page_admin_dashboard(tenant):
             if vini_sede:
                 try:
                     _b2 = genera_pdf_lista(vini_sede, f"Lista - {sede_sel} ({tenant['nome']})")
-                    fn2 = f"divisa_{sede_sel.lower().replace(' ','_')}.pdf"
-                    _dl_btn_html(f"Divisa {sede_sel}", _b2, fn2)
+                    st.download_button(f"Divisa {sede_sel}", data=_b2,
+                                       file_name=f"divisa_{sede_sel.lower().replace(' ','_')}.pdf",
+                                       mime="application/pdf",
+                                       use_container_width=True, key="dl_divisa")
                 except Exception:
                     pass
     with pc3:
         if giacenza:
             try:
                 _b3 = genera_pdf_catalogo(giacenza, tenant.get("nome","Cantina"))
-                _dl_btn_html("Catalogo PDF", _b3, f"catalogo_{nome_f}.pdf",
-                             bg=PRIMARY, tc="white")
+                st.download_button("Catalogo PDF", data=_b3,
+                                   file_name=f"catalogo_{nome_f}.pdf",
+                                   mime="application/pdf",
+                                   use_container_width=True, type="primary",
+                                   key="dl_cat")
             except Exception:
                 pass
     st.markdown("---")
@@ -1471,14 +1465,14 @@ def page_admin_dashboard(tenant):
 
             with qr_cols[i % 4]:
                 st.markdown(f'<img src="data:image/png;base64,{prev_b64}" style="width:100%;border-radius:8px;margin-bottom:8px;border:1px solid #2A2A2A;"/>', unsafe_allow_html=True)
-                _qr_b64 = base64.b64encode(card_bytes).decode()
-                _qr_fn = f"lista_qr_{sede.lower().replace(' ','_')}.png"
-                components.html(f'''<a href="data:image/png;base64,{_qr_b64}" download="{_qr_fn}"
-                    style="display:flex;align-items:center;justify-content:center;width:100%;
-                    padding:8px;background:#252525;color:#C9A84C;border:1px solid #555;
-                    border-radius:8px;text-decoration:none;font-weight:600;
-                    font-family:Inter,sans-serif;font-size:0.82em;box-sizing:border-box;
-                    cursor:pointer;">Scarica QR - {sede}</a>''', height=44)
+                st.download_button(
+                    label=f"Scarica QR - {sede}",
+                    data=card_bytes,
+                    file_name=f"lista_qr_{sede.lower().replace(' ','_')}.png",
+                    mime="image/png",
+                    use_container_width=True,
+                    key=f"qr_dl_{i}"
+                )
                 wa_msg = urllib.parse.quote(f"Lista vini {tenant.get('nome',sede)} - {sede}: {url_lista}")
                 st.markdown(
                     f'<a href="https://wa.me/?text={wa_msg}" target="_blank" '
