@@ -4,7 +4,7 @@ Client Supabase con supporto multi-tenant, autenticazione custom e CRUD.
 """
 import streamlit as st
 from supabase import create_client, Client
-import hashlib, secrets, time
+import hashlib, secrets, time, uuid
 
 BUCKET = "cantina-images"
 
@@ -87,14 +87,17 @@ def get_tenant_by_slug_lista(slug: str) -> dict:
 
 # ── Vini / Mignon (filtrati per tenant) ───────────────────────────────────────
 
+@st.cache_data(ttl=60)
 def get_vini(tenant_id: str) -> list[dict]:
     sb = get_sb()
     return sb.table("vini").select("*").eq("tenant_id", tenant_id).order("id").execute().data or []
 
+@st.cache_data(ttl=60)
 def get_mignon(tenant_id: str) -> list[dict]:
     sb = get_sb()
     return sb.table("mignon").select("*").eq("tenant_id", tenant_id).order("id").execute().data or []
 
+@st.cache_data(ttl=60)
 def get_vini_portale(tenant_id: str) -> list[dict]:
     """Vini pubblici (in vendita) per il portale."""
     sb = get_sb()
@@ -151,8 +154,8 @@ def upload_image(file_bytes: bytes, filename: str, folder: str = "vini") -> str:
     path = f"{folder}/{filename}"
     try:
         sb.storage.from_(BUCKET).remove([path])
-    except:
-        pass
+    except Exception:
+        pass  # File non esistente, procediamo
     sb.storage.from_(BUCKET).upload(path, file_bytes, file_options={"content-type": "image/jpeg"})
     return sb.storage.from_(BUCKET).get_public_url(path)
 

@@ -5,7 +5,7 @@ Piattaforma multi-tenant per la gestione di cantine vino.
 Ruoli: superadmin | admin (cliente) | portale pubblico
 """
 import streamlit as st
-import os, random, base64, datetime, hashlib, re, smtplib
+import os, random, base64, datetime, hashlib, re, smtplib, uuid
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from io import BytesIO
@@ -319,6 +319,7 @@ SCALA_ZUCCHERI = ["N.S.","Pas Dosé","Extra Brut","Brut","Extra Dry","Dry","Demi
 PIANI = {"base": "🥈 Base", "pro": "🥇 Pro", "enterprise": "💎 Enterprise"}
 
 SUPERADMIN_EMAIL = st.secrets.get("SUPERADMIN_EMAIL", "admin@cantina.pro")
+APP_BASE_URL     = st.secrets.get("APP_BASE_URL", "https://cantina-cloud-gian.streamlit.app")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SESSION STATE
@@ -327,14 +328,16 @@ SUPERADMIN_EMAIL = st.secrets.get("SUPERADMIN_EMAIL", "admin@cantina.pro")
 def init_state():
     defaults = {
         "logged_in": False,
-        "user": None,          # dict tenant
+        "user": None,
         "ruolo": None,
         "page": "dashboard",
-        "tenant_view": None,   # superadmin accede come cliente
+        "tenant_view": None,
         "id_modifica": None,
         "sezione_cantina": "VINI",
         "luogo_sel": "TUTTE LE SEDI",
         "cat_sel": "TUTTI",
+        "login_attempts": 0,
+        "login_blocked_until": None,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -348,11 +351,11 @@ init_state()
 
 def to_float(x):
     try: return float(str(x).replace(",", "."))
-    except: return 0.0
+    except (ValueError, TypeError): return 0.0
 
 def to_int(x):
     try: return int(str(x).split()[0])
-    except: return 0
+    except (ValueError, TypeError, IndexError): return 0
 
 def calcola_totali(data):
     bottiglie = sum(to_int(v.get("qta",0)) for v in data if v.get("tipo_cat") != "Provati")
@@ -513,7 +516,7 @@ if lista_slug:
         '<div style="border-top:1px solid #2a1a1a;margin-top:24px;padding:32px 20px 20px;text-align:center;">'
         f'<div style="font-family:Playfair Display,serif;font-size:1em;color:#C9A84C;margin-bottom:6px;">'
         f'Desideri gestire la tua cantina digitale?</div>'
-        f'<a href="https://cantina-cloud-gian.streamlit.app/" target="_blank" '
+        f'<a href="{APP_BASE_URL}/" target="_blank" '
         f'style="display:inline-block;background:#8B1A1A;color:white;text-decoration:none;'
         f'padding:10px 28px;border-radius:8px;font-size:0.88em;font-weight:600;margin:8px 0;'
         f'letter-spacing:0.5px;">🍷 Scopri CantinaPro</a>'
@@ -654,18 +657,32 @@ def show_login():
                 pwd_l   = st.text_input("Password", type="password", placeholder="••••••••", key="login_pwd")
                 sub_l   = st.form_submit_button("🔓 ACCEDI", use_container_width=True, type="primary")
             if sub_l:
-                if not email_l or not pwd_l:
+                _now = datetime.datetime.now()
+                _blocked = st.session_state.login_blocked_until
+                if _blocked and _now < _blocked:
+                    _sec = int((_blocked - _now).total_seconds())
+                    st.error(f"🔒 Troppi tentativi falliti. Riprova tra {_sec} secondi.")
+                elif not email_l or not pwd_l:
                     st.error("Inserisci email e password.")
                 else:
                     user = db.verify_login(email_l.strip().lower(), pwd_l)
                     if user:
+                        st.session_state.login_attempts = 0
+                        st.session_state.login_blocked_until = None
                         st.session_state.logged_in = True
                         st.session_state.user      = user
                         st.session_state.ruolo     = user.get("ruolo", "admin")
                         st.session_state.page      = "dashboard"
                         st.rerun()
                     else:
-                        st.error("Credenziali non valide o account disattivato.")
+                        st.session_state.login_attempts += 1
+                        _att = st.session_state.login_attempts
+                        if _att >= 5:
+                            st.session_state.login_blocked_until = datetime.datetime.now() + datetime.timedelta(minutes=5)
+                            st.session_state.login_attempts = 0
+                            st.error("🔒 Troppi tentativi falliti. Accesso bloccato per 5 minuti.")
+                        else:
+                            st.error(f"❌ Credenziali non valide. ({_att}/5 tentativi)")
             st.markdown("</div>", unsafe_allow_html=True)
 
         # ── TAB REGISTRAZIONE ──────────────────────────────────────────────────
@@ -700,7 +717,7 @@ def show_login():
                 else:
                     # Crea slug univoco
                     slug_base = re.sub(r'[^a-z0-9]', '-', nome_c.strip().lower())[:30]
-                    slug = f"{slug_base}-{random.randint(1000,9999)}"
+                    slug = f"{slug_base}-{uuid.uuid4().hex[:6]}"
                     scadenza = (datetime.date.today() + datetime.timedelta(days=14)).isoformat()
 
                     nuovo_tenant = db.create_tenant({
@@ -756,7 +773,7 @@ def salva_img_cloud(uploaded_file, folder: str) -> str:
         img.thumbnail((900, 900))
         buf = BytesIO()
         img.save(buf, "JPEG", quality=75, optimize=True)
-        fname = f"img_{random.randint(100000,999999)}.jpg"
+        fname = f"img_{uuid.uuid4().hex[:12]}.jpg"
         return db.upload_image(buf.getvalue(), fname, folder)
     except Exception as e:
         st.error(f"Errore upload immagine: {e}")
@@ -1370,6 +1387,36 @@ def dialog_stappa(v, tenant_id, tipo):
                 db.insert_vino(tenant_id, copia)
             else:
                 db.update_vino(v["id"], {"qta":0,"tipo_cat":"Provati","giudizio":giudizio,"cat_origine":v.get("tipo_cat","Rossi")})
+        db.get_vini.clear()
+        st.rerun()
+
+@st.dialog("🗑️ Elimina vino")
+def dialog_delete(v, tipo):
+    st.markdown(f"Sei sicuro di voler eliminare **{v.get('nome','')}**?")
+    if v.get("azienda"): st.caption(f"🏭 {v['azienda']}  ·  {v.get('annata','')}")
+    st.warning("L'operazione è irreversibile. La foto verrà rimossa dallo storage cloud.")
+    c1, c2 = st.columns(2)
+    if c1.button("✖ Annulla", use_container_width=True, type="secondary"):
+        st.rerun()
+    if c2.button("🗑️ Elimina definitivamente", use_container_width=True, type="primary"):
+        # Pulizia foto orfana dallo storage
+        foto_url = v.get("foto_url", "")
+        if foto_url:
+            try:
+                # Estrae il path relativo dall'URL pubblico
+                bucket_marker = "/cantina-images/"
+                if bucket_marker in foto_url:
+                    path = foto_url.split(bucket_marker)[1].split("?")[0]
+                    db.get_sb().storage.from_("cantina-images").remove([path])
+            except Exception:
+                pass
+        if tipo == "vini":
+            db.get_sb().table("vini").delete().eq("id", v["id"]).execute()
+        else:
+            db.get_sb().table("mignon").delete().eq("id", v["id"]).execute()
+        db.get_vini.clear()
+        db.get_mignon.clear()
+        st.success(f"✅ '{v.get('nome','')}' eliminato.")
         st.rerun()
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1453,6 +1500,8 @@ def form_vino(tenant_id, tipo="vini", vino_esistente=None):
                 db.update_vino(v["id"], payload) if tipo=="vini" else db.update_mignon(v["id"], payload)
             else:
                 db.insert_vino(tenant_id, payload) if tipo=="vini" else db.insert_mignon(tenant_id, payload)
+            db.get_vini.clear()
+            db.get_mignon.clear()
             return True
     return False
 
@@ -1532,8 +1581,8 @@ def page_admin_dashboard(tenant):
                 st.download_button("Scarica Lista PDF", data=_b,
                                    file_name="cantina.pdf", mime="application/pdf",
                                    use_container_width=True, key="dl_lista")
-            except Exception:
-                pass
+            except Exception as _e:
+                st.warning(f"⚠️ PDF non disponibile: {_e}")
     with pc2:
         if sedi:
             sede_sel = st.selectbox("Sede", sedi, key="sede_divisa_sel",
@@ -1548,8 +1597,8 @@ def page_admin_dashboard(tenant):
                                        file_name=f"divisa_{sede_sel.lower().replace(' ','_')}.pdf",
                                        mime="application/pdf",
                                        use_container_width=True, key="dl_divisa")
-                except Exception:
-                    pass
+                except Exception as _e:
+                    st.warning(f"⚠️ PDF non disponibile: {_e}")
     with pc3:
         if giacenza:
             try:
@@ -1559,8 +1608,8 @@ def page_admin_dashboard(tenant):
                                    mime="application/pdf",
                                    use_container_width=True, type="primary",
                                    key="dl_cat")
-            except Exception:
-                pass
+            except Exception as _e:
+                st.warning(f"⚠️ PDF non disponibile: {_e}")
     st.markdown("---")
 
     # ── STAMPA ETICHETTE CON INTERVALLO ───────────────────────────────
@@ -1613,7 +1662,7 @@ def page_admin_dashboard(tenant):
         import qrcode, urllib.parse
         qr_cols = st.columns(min(len(sedi), 4))
         for i, sede in enumerate(sedi):
-            url_lista = f"https://cantina-cloud-gian.streamlit.app?lista={slug}&luogo={urllib.parse.quote(sede)}"
+            url_lista = f"{APP_BASE_URL}?lista={slug}&luogo={urllib.parse.quote(sede)}"
             n_vini = len([v for v in vini if v.get("luogo")==sede and v.get("tipo_cat")!="Provati" and to_int(v.get("qta",0))>0])
 
             qr = qrcode.QRCode(version=1, box_size=8, border=2,
@@ -1771,19 +1820,23 @@ def grid_vini(tenant, tipo="vini"):
             st.markdown("</div>", unsafe_allow_html=True)
 
             # Azioni
-            a1,a2,a3,a4,a5 = st.columns(5)
+            a1,a2,a3,a4,a5,a6 = st.columns(6)
             if a1.button("−", key=f"m_{tipo}_{v['id']}", help="Decrementa"):
                 upd = db.update_vino if tipo=="vini" else db.update_mignon
-                upd(v["id"], {"qta": max(0, q-1)}); st.rerun()
+                upd(v["id"], {"qta": max(0, q-1)})
+                db.get_vini.clear(); db.get_mignon.clear(); st.rerun()
             if a2.button("+", key=f"p_{tipo}_{v['id']}", help="Incrementa"):
                 upd = db.update_vino if tipo=="vini" else db.update_mignon
-                upd(v["id"], {"qta": q+1}); st.rerun()
+                upd(v["id"], {"qta": q+1})
+                db.get_vini.clear(); db.get_mignon.clear(); st.rerun()
             if a3.button("✏️", key=f"e_{tipo}_{v['id']}", help="Modifica"):
                 st.session_state.id_modifica = v["id"]; st.rerun()
             if a4.button("📖", key=f"s_{tipo}_{v['id']}", help="Scheda"):
                 dialog_scheda(v)
             if a5.button("🍷", key=f"sta_{tipo}_{v['id']}", help="Stappa") and tipo=="vini":
                 dialog_stappa(v, tid, tipo)
+            if a6.button("🗑️", key=f"del_{tipo}_{v['id']}", help="Elimina"):
+                dialog_delete(v, tipo)
 
 def page_admin_portale(tenant):
     tid = tenant["id"]
@@ -1793,9 +1846,13 @@ def page_admin_portale(tenant):
     slug   = tenant.get("portale_slug","")
 
     if attivo and slug:
-        url = f"?portale={slug}"
-        st.success(f"✅ Portale attivo! Link pubblico: `{url}`")
-        st.markdown(f"[🔗 Apri il portale]({url})", unsafe_allow_html=True)
+        url_pub = f"{APP_BASE_URL}?portale={slug}"
+        st.success(f"✅ Portale attivo!")
+        st.code(url_pub, language=None)
+        st.markdown(f"[🔗 Apri il portale]({url_pub})")
+        import urllib.parse as _up
+        wa_msg = _up.quote(f"Visita il mio catalogo vini: {url_pub}")
+        st.markdown(f'<a href="https://wa.me/?text={wa_msg}" target="_blank" style="font-size:0.85em;color:#25D366;font-weight:600;">📲 Condividi su WhatsApp</a>', unsafe_allow_html=True)
     else:
         st.warning("Il portale di vendita non è ancora attivo. Contatta l'amministratore per abilitarlo.")
 
