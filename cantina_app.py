@@ -1335,9 +1335,6 @@ def page_admin_dashboard(tenant):
     tid = tenant["id"]
     st.markdown(f"<h2 style='color:{ACCENT};'>📊 La Mia Cantina</h2>", unsafe_allow_html=True)
 
-    # ── DEBUG ──────────────────
-    st.info("📍 MARKER-A: inizio dashboard")
-    # ────────────────────────────
 
     vini   = db.get_vini(tid)
     mignon = db.get_mignon(tid)
@@ -1350,18 +1347,12 @@ def page_admin_dashboard(tenant):
     c3.metric("🥃 Mignon", f"{tm:,}")
     c4.metric("💶 Valore Mignon", f"€ {vm:,.0f}")
 
-    # ── DEBUG ──────────────────
-    st.info("📍 MARKER-B: dopo le metriche")
-    # ────────────────────────────
 
     st.markdown("---")
 
     # ── Sedi ──────────────────────────────────────────────────────────
     sedi = sorted(set(v.get("luogo","") for v in vini if v.get("luogo") and v.get("luogo") != "None"))
 
-    # ── DEBUG ──────────────────
-    st.info(f"📍 MARKER-C: sedi trovate = {sedi}")
-    # ────────────────────────────
 
     if sedi:
         st.markdown("#### 🏠 Le Tue Sedi")
@@ -1378,9 +1369,6 @@ def page_admin_dashboard(tenant):
                 </div>
                 """, unsafe_allow_html=True)
 
-    # ── DEBUG ──────────────────
-    st.info("📍 MARKER-D: dopo le sedi, prima dei PDF")
-    # ────────────────────────────
 
     st.markdown("---")
 
