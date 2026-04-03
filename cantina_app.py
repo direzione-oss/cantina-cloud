@@ -982,96 +982,112 @@ def genera_pdf_catalogo(lista, nome_cantina="Cantina"):
     return bytes(pdf.output())
 
 
-def genera_pdf_etichette(lista, titolo="Etichette"):
-    """Genera PDF con etichette stampabili 3 colonne × 8 righe su A4.
-    Ogni etichetta: ID breve, nome, azienda, annata, prezzo, sede."""
+def genera_pdf_etichette(lista, titolo="Etichette", num_offset=0):
+    """Genera PDF con etichette stile originale: griglia 3×3 su A4 portrait.
+    Ogni etichetta: cerchietto, #N grande, foto bottiglia, nome, azienda, annata, sede.
+    num_offset: offset per la numerazione (es. se stampi da posizione 5, offset=4)."""
+    import urllib.request, tempfile
+
     pdf = FPDF(orientation="P", unit="mm", format="A4")
     pdf.set_margins(8, 8, 8)
     pdf.set_auto_page_break(False)
 
-    # Layout: 3 colonne × 8 righe, margine 8mm
-    E_W = 62    # larghezza etichetta
-    E_H = 33    # altezza etichetta
+    # Layout: 3 colonne × 3 righe su A4 portrait (210×297)
+    E_W = 62     # larghezza etichetta
+    E_H = 90     # altezza etichetta
     GAP_X = 3
-    GAP_Y = 2
+    GAP_Y = 3
     COLS = 3
-    ROWS = 8
+    ROWS = 3
+    PAGE_W = 210 - 16  # 194mm utili
+    MARGIN_X = (PAGE_W - COLS * E_W - (COLS - 1) * GAP_X) / 2
 
-    page_started = False
     for idx, v in enumerate(lista):
         col = idx % COLS
         row = (idx // COLS) % ROWS
         if col == 0 and row == 0:
             pdf.add_page()
-            page_started = True
-            # Header pagina
-            pdf.set_font("Arial", "I", 7)
-            pdf.set_text_color(160, 160, 160)
-            pdf.cell(0, 4, f"{pp(titolo)}  -  pag. {pdf.page_no()}", ln=True, align="C")
-            pdf.ln(1)
 
-        x = 8 + col * (E_W + GAP_X)
-        y = 14 + row * (E_H + GAP_Y)
+        x = 8 + MARGIN_X + col * (E_W + GAP_X)
+        y = 8 + row * (E_H + GAP_Y)
 
         # Bordo etichetta
         pdf.set_draw_color(180, 180, 180)
         pdf.rect(x, y, E_W, E_H)
 
-        # Banda superiore bordeaux
-        pdf.set_fill_color(139, 26, 26)
-        pdf.rect(x, y, E_W, 7, "F")
+        # Cerchietto in alto al centro (segno per foro)
+        cx = x + E_W / 2
+        cy_circle = y + 4
+        pdf.set_draw_color(180, 180, 180)
+        pdf.ellipse(cx - 2.5, cy_circle - 2.5, 5, 5)
 
-        # ID + nome nella banda
-        vid = str(v.get("id", ""))[:8]
-        pdf.set_xy(x + 1, y + 1)
-        pdf.set_font("Arial", "B", 7)
-        pdf.set_text_color(255, 255, 255)
-        nome_trunc = pp(v.get("nome", ""))[:28]
-        pdf.cell(E_W - 2, 5, f"#{vid}  {nome_trunc}", 0, 0, "L")
-
-        # Corpo etichetta
-        corpo_y = y + 8
-        pdf.set_text_color(40, 40, 40)
-
-        # Azienda
-        pdf.set_xy(x + 2, corpo_y)
-        pdf.set_font("Arial", "", 7)
-        pdf.cell(E_W - 4, 4, pp(v.get("azienda", ""))[:30], 0, 0, "L")
-
-        # Annata + Gradi
-        pdf.set_xy(x + 2, corpo_y + 4.5)
-        pdf.set_font("Arial", "", 6.5)
-        annata = v.get("annata", "")
-        gradi = v.get("gradi", "")
-        det = f"Annata: {annata}" if annata else ""
-        if gradi: det += f"  |  {gradi}%" if det else f"Gradi: {gradi}%"
-        pdf.cell(E_W - 4, 4, pp(det), 0, 0, "L")
-
-        # Formato + Sede
-        pdf.set_xy(x + 2, corpo_y + 9)
-        pdf.set_font("Arial", "", 6.5)
-        sede = v.get("luogo", "")
-        coll = v.get("collocazione", "")
-        fmt = v.get("formato", "")
-        loc_txt = f"{sede}" + (f" / {coll}" if coll else "")
-        info = f"{fmt}" if fmt else ""
-        if loc_txt: info += f"  |  {loc_txt}" if info else loc_txt
-        pdf.cell(E_W - 4, 4, pp(info)[:35], 0, 0, "L")
-
-        # Prezzo (in basso a destra)
-        pdf.set_xy(x + 2, corpo_y + 14)
-        pdf.set_font("Arial", "B", 9)
-        pdf.set_text_color(139, 26, 26)
-        prezzo = to_float(v.get("prezzo", 0))
-        pdf.cell(E_W - 4, 5, f"E {prezzo:.2f}", 0, 0, "R")
-
-        # Qta (in basso a sinistra)
-        pdf.set_xy(x + 2, corpo_y + 14)
-        pdf.set_font("Arial", "", 7)
-        pdf.set_text_color(80, 80, 80)
-        pdf.cell(20, 5, f"Qta: {to_int(v.get('qta', 0))}", 0, 0, "L")
-
+        # Numero grande
+        num = idx + 1 + num_offset
+        pdf.set_xy(x + 2, y + 7)
+        pdf.set_font("Arial", "B", 22)
         pdf.set_text_color(0, 0, 0)
+        pdf.cell(E_W - 4, 10, f"#{num}", 0, 0, "L")
+
+        # Foto bottiglia (se disponibile)
+        foto_url = v.get("foto_url", "")
+        img_y = y + 18
+        img_h = 38
+        if foto_url:
+            try:
+                req = urllib.request.Request(foto_url, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    img_data = resp.read()
+                tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+                tmp.write(img_data)
+                tmp.close()
+                # Centra l'immagine orizzontalmente
+                pdf.image(tmp.name, x=x + E_W/2 - 12, y=img_y, h=img_h)
+                import os
+                os.unlink(tmp.name)
+            except Exception:
+                # Se fallisce, metti placeholder
+                pdf.set_xy(x + 2, img_y + 10)
+                pdf.set_font("Arial", "", 8)
+                pdf.set_text_color(180, 180, 180)
+                pdf.cell(E_W - 4, 5, "(no foto)", 0, 0, "C")
+        else:
+            pdf.set_xy(x + 2, img_y + 10)
+            pdf.set_font("Arial", "", 8)
+            pdf.set_text_color(180, 180, 180)
+            pdf.cell(E_W - 4, 5, "(no foto)", 0, 0, "C")
+
+        # Nome vino (sotto la foto)
+        nome_y = img_y + img_h + 2
+        pdf.set_xy(x + 2, nome_y)
+        pdf.set_font("Arial", "B", 8)
+        pdf.set_text_color(0, 0, 0)
+        nome = pp(v.get("nome", ""))
+        if len(nome) > 25:
+            pdf.multi_cell(E_W - 4, 3.5, nome[:50], 0, "C")
+        else:
+            pdf.cell(E_W - 4, 4, nome[:25], 0, 0, "C")
+
+        # Azienda (italico)
+        pdf.set_xy(x + 2, nome_y + 5)
+        pdf.set_font("Arial", "I", 7)
+        pdf.set_text_color(60, 60, 60)
+        pdf.cell(E_W - 4, 3.5, pp(v.get("azienda", ""))[:25], 0, 0, "C")
+
+        # Annata
+        annata = v.get("annata", "")
+        if annata:
+            pdf.set_xy(x + 2, nome_y + 9)
+            pdf.set_font("Arial", "", 7)
+            pdf.set_text_color(0, 0, 0)
+            pdf.cell(E_W - 4, 3.5, f"Annata: {annata}", 0, 0, "C")
+
+        # Sede (in basso, italico piccolo)
+        pdf.set_xy(x + 2, y + E_H - 7)
+        pdf.set_font("Arial", "I", 6)
+        pdf.set_text_color(120, 120, 120)
+        sede = v.get("luogo", "")
+        if sede:
+            pdf.cell(E_W - 4, 3, f"SEDE: {pp(sede)}", 0, 0, "C")
 
     return bytes(pdf.output())
 
@@ -1537,7 +1553,8 @@ def page_admin_dashboard(tenant):
             if selezione:
                 try:
                     _b_et = genera_pdf_etichette(selezione,
-                                f"Etichette {tenant.get('nome','Cantina')} ({id_da}-{id_a})")
+                                f"Etichette {tenant.get('nome','Cantina')} ({id_da}-{id_a})",
+                                num_offset=id_da - 1)
                     st.download_button(f"Stampa {len(selezione)} etichette (pos. {id_da}–{id_a})",
                                        data=_b_et,
                                        file_name=f"etichette_{id_da}_{id_a}.pdf",
