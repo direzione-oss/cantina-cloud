@@ -762,8 +762,18 @@ def pp(t):
             .decode("latin-1"))
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PDF
+# PDF  (funzioni cached per evitare rigenerazione ad ogni rerun)
 # ─────────────────────────────────────────────────────────────────────────────
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _cached_pdf_lista(vini_tuple, titolo):
+    """Genera lista PDF (cached 5 min)."""
+    return genera_pdf_lista(list(vini_tuple), titolo)
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _cached_pdf_catalogo(vini_tuple, nome_cantina):
+    """Genera catalogo PDF (cached 5 min)."""
+    return genera_pdf_catalogo(list(vini_tuple), nome_cantina)
 
 def genera_pdf_lista(lista, titolo):
     from collections import OrderedDict
@@ -1380,7 +1390,6 @@ def page_admin_dashboard(tenant):
             url_lista = f"https://cantina-cloud-gian.streamlit.app?lista={slug}&luogo={urllib.parse.quote(sede)}"
             n_vini = len([v for v in vini if v.get("luogo")==sede and v.get("tipo_cat")!="Provati" and to_int(v.get("qta",0))>0])
 
-            # ── Genera QR ──────────────────────────────────────────────
             qr = qrcode.QRCode(version=1, box_size=8, border=2,
                                error_correction=qrcode.constants.ERROR_CORRECT_M)
             qr.add_data(url_lista)
@@ -1388,45 +1397,28 @@ def page_admin_dashboard(tenant):
             img_qr = qr.make_image(fill_color="#8B1A1A", back_color="white").convert("RGB")
             qr_w, qr_h = img_qr.size
 
-            # ── Componi immagine stampabile con PIL ────────────────────
             card_w = qr_w + 60
             card_h = qr_h + 200
             card = Image.new("RGB", (card_w, card_h), color="#FFFFFF")
             from PIL import ImageDraw, ImageFont
             draw = ImageDraw.Draw(card)
-
-            # Striscia bordeaux in alto
             draw.rectangle([0, 0, card_w, 60], fill="#8B1A1A")
-            # Emoji vino (come testo)
             draw.text((card_w//2, 30), "🍷", fill="white", anchor="mm")
-
-            # Nome cantina
-            nome_cantina = tenant.get("nome", "Cantina")
+            nome_cantina_qr = tenant.get("nome", "Cantina")
             draw.rectangle([0, 60, card_w, 120], fill="#F9F4F4")
-            draw.text((card_w//2, 90), nome_cantina[:30], fill="#8B1A1A", anchor="mm")
-
-            # Sede
+            draw.text((card_w//2, 90), nome_cantina_qr[:30], fill="#8B1A1A", anchor="mm")
             draw.text((card_w//2, 120), f"📍  {sede}", fill="#555555", anchor="mm")
-
-            # QR al centro
             card.paste(img_qr, (30, 145))
-
-            # Testo istruzione sotto
             y_txt = 145 + qr_h + 12
             draw.rectangle([0, y_txt - 4, card_w, card_h], fill="#F9F4F4")
             draw.text((card_w//2, y_txt + 10), "Scansiona per vedere la lista vini", fill="#8B1A1A", anchor="mm")
             draw.text((card_w//2, y_txt + 28), f"{n_vini} etichette disponibili", fill="#999999", anchor="mm")
-
-            # Bordo arrotondato (effetto)
             draw.rectangle([0, 0, card_w-1, card_h-1], outline="#CCCCCC", width=2)
 
-            # ── Salva immagine card ────────────────────────────────────
             buf_card = BytesIO()
             card.save(buf_card, format="PNG", dpi=(300, 300))
             buf_card.seek(0)
-            card_b64 = base64.b64encode(buf_card.read()).decode()
 
-            # Anteprima nel dashboard (piccola)
             buf_preview = BytesIO()
             card.thumbnail((200, 300))
             card.save(buf_preview, format="PNG")
@@ -1444,9 +1436,8 @@ def page_admin_dashboard(tenant):
                     use_container_width=True,
                     key=f"qr_dl_{i}"
                 )
-                # Link condivisibile
-                nome_cantina = tenant.get("nome", sede)
-                wa_msg = urllib.parse.quote(f"Lista vini {nome_cantina} — {sede}: {url_lista}")
+                nome_cantina_wa = tenant.get("nome", sede)
+                wa_msg = urllib.parse.quote(f"Lista vini {nome_cantina_wa} - {sede}: {url_lista}")
                 st.markdown(
                     f'<a href="https://wa.me/?text={wa_msg}" target="_blank" '
                     f'style="display:block;text-align:center;font-size:0.82em;'
@@ -1463,54 +1454,50 @@ def page_admin_dashboard(tenant):
                     unsafe_allow_html=True
                 )
 
-
     st.markdown("---")
 
-    # ── PDF — usa session_state per evitare widget fantasma ────────────
-    k_lista   = f"pdf_lista_{tid}"
-    k_divisa  = f"pdf_divisa_{tid}"
-    k_cat     = f"pdf_cat_{tid}"
+    # ── PDF: un solo download_button per tipo, no session_state ──────
+    giacenza = [v for v in vini if to_int(v.get("qta",0))>0 and v.get("tipo_cat")!="Provati"]
+    nome_f   = tenant.get("nome","cantina").lower().replace(" ","_")
 
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        if st.button("📄 Lista PDF", use_container_width=True, type="secondary"):
-            giacenza = [v for v in vini if to_int(v.get("qta",0))>0 and v.get("tipo_cat")!="Provati"]
-            st.session_state[k_lista] = genera_pdf_lista(giacenza, f"Giacenza — {tenant['nome']}")
-        if k_lista in st.session_state:
-            st.download_button("📥 Scarica Lista", data=st.session_state[k_lista],
+        if giacenza:
+            _b = _cached_pdf_lista(
+                tuple(frozenset(v.items()) for v in giacenza),
+                f"Giacenza - {tenant['nome']}")
+            st.download_button("📄 Lista PDF", data=_b,
                                file_name="cantina.pdf", mime="application/pdf",
                                use_container_width=True, key="dl_lista")
 
     with col2:
         if sedi:
-            sede_sel = st.selectbox("📍 Sede", sedi, key="sede_divisa_sel", label_visibility="collapsed")
-            if st.button(f"📝 Divisa {sede_sel}", use_container_width=True, type="secondary"):
-                vini_sede = [v for v in vini if v.get("luogo")==sede_sel
-                             and v.get("tipo_cat")!="Provati"
-                             and to_int(v.get("qta",0))>0]
-                st.session_state[k_divisa] = genera_pdf_lista(
-                    vini_sede, f"Lista — {sede_sel} ({tenant['nome']})")
-            if k_divisa in st.session_state:
-                st.download_button("📥 Scarica Divisa", data=st.session_state[k_divisa],
+            sede_sel = st.selectbox("📍 Sede", sedi, key="sede_divisa_sel",
+                                    label_visibility="collapsed")
+            vini_sede = [v for v in vini if v.get("luogo")==sede_sel
+                         and v.get("tipo_cat")!="Provati"
+                         and to_int(v.get("qta",0))>0]
+            if vini_sede:
+                _b2 = _cached_pdf_lista(
+                    tuple(frozenset(v.items()) for v in vini_sede),
+                    f"Lista - {sede_sel} ({tenant['nome']})")
+                st.download_button(f"📝 Divisa {sede_sel}", data=_b2,
                                    file_name=f"divisa_{sede_sel.lower().replace(' ','_')}.pdf",
                                    mime="application/pdf",
                                    use_container_width=True, key="dl_divisa")
 
     with col3:
-        if st.button("📚 Catalogo PDF completo", use_container_width=True, type="primary",
-                     help="PDF A4 con scheda dettagliata per ogni vino, diviso per categoria"):
-            giacenza = [v for v in vini if to_int(v.get("qta",0))>0 and v.get("tipo_cat")!="Provati"]
-            with st.spinner("Generazione catalogo..."):
-                st.session_state[k_cat] = genera_pdf_catalogo(giacenza, tenant.get("nome","Cantina"))
-        if k_cat in st.session_state:
-            nome_f = tenant.get("nome","cantina").lower().replace(" ","_")
-            st.download_button("📥 Scarica Catalogo", data=st.session_state[k_cat],
-                               file_name=f"catalogo_{nome_f}.pdf", mime="application/pdf",
-                               use_container_width=True, type="primary", key="dl_cat")
-
-
-
+        if giacenza:
+            with st.spinner("Catalogo in preparazione..."):
+                _b3 = _cached_pdf_catalogo(
+                    tuple(frozenset(v.items()) for v in giacenza),
+                    tenant.get("nome","Cantina"))
+            st.download_button("📚 Catalogo PDF completo", data=_b3,
+                               file_name=f"catalogo_{nome_f}.pdf",
+                               mime="application/pdf",
+                               use_container_width=True, type="primary",
+                               key="dl_cat")
 
 
 def grid_vini(tenant, tipo="vini"):
