@@ -54,6 +54,32 @@ p, h1, h2, h3, h4, h5, h6, li, span, label,
 [data-testid="stMarkdownContainer"] p,
 [data-testid="stMarkdownContainer"] span {{ color: {TEXT_MAIN} !important; }}
 
+/* ── DIALOG / MODAL: tema scuro come l'app ── */
+[data-testid="stDialog"] > div {{
+    background-color: #1A1A1A !important;
+    border: 1px solid #2A2A2A !important;
+    border-radius: 16px !important;
+}}
+[data-testid="stDialog"] p,
+[data-testid="stDialog"] span,
+[data-testid="stDialog"] h1,
+[data-testid="stDialog"] h2,
+[data-testid="stDialog"] h3,
+[data-testid="stDialog"] h4,
+[data-testid="stDialog"] div,
+[data-testid="stDialog"] label {{
+    color: {TEXT_MAIN} !important;
+}}
+[data-testid="stDialog"] [data-testid="stMarkdownContainer"] p,
+[data-testid="stDialog"] [data-testid="stMarkdownContainer"] span {{
+    color: {TEXT_MAIN} !important;
+}}
+/* Titolo dialog */
+[data-testid="stDialog"] [data-testid="stDialogTitle"] p {{
+    color: {ACCENT} !important; font-weight: 700 !important;
+}}
+
+
 /* ── LABEL FORM ── */
 [data-testid="stTextInput"] label,
 [data-testid="stTextArea"] label,
@@ -955,13 +981,13 @@ def dialog_scheda(v):
         if v.get("foto_url"):
             st.image(v["foto_url"], use_container_width=True)
         else:
-            st.markdown("<div style='text-align:center;padding:40px;color:#888;font-size:2em;'>📷</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center;padding:40px;color:#666;font-size:2em;'>📷</div>", unsafe_allow_html=True)
     with c2:
         def r(icon, label, val):
             if not val or val in ("N.D.", "", "0", "0.0", "0,00"): val = "—"
             return (f'<div style="margin-bottom:10px;line-height:1.4;">'
-                    f'<span style="color:#8B1A1A;font-weight:700;">{icon} {label}</span>'
-                    f'<br><span style="color:#111;font-size:0.97em;">{val}</span></div>')
+                    f'<span style="color:#C9A84C;font-weight:700;font-size:0.8em;letter-spacing:0.5px;text-transform:uppercase;">{icon} {label}</span>'
+                    f'<br><span style="color:#F0EDE8;font-size:1em;">{val}</span></div>')
 
         precio = to_float(v.get("prezzo", 0))
         luogo = v.get("luogo", "—")
@@ -969,7 +995,7 @@ def dialog_scheda(v):
         prov = v.get("provenienza", "")
 
         html = (
-            f'<h3 style="color:#8B1A1A;margin-bottom:14px;font-size:1.3em;">{v["nome"]}</h3>'
+            f'<h3 style="color:#C9A84C;margin-bottom:16px;font-size:1.3em;border-bottom:1px solid #2A2A2A;padding-bottom:10px;">{v["nome"]}</h3>'
             + r("🏭", "Cantina", v.get("azienda", ""))
             + r("📅", "Annata", v.get("annata", ""))
             + r("📊", "Gradi", f'{v.get("gradi","")}%' if v.get("gradi") else "")
@@ -981,14 +1007,14 @@ def dialog_scheda(v):
             + r("📍", "Sede", f"{luogo}{colloc}")
             + (r("🎁", "Fonte", prov) if prov else "")
         )
-        st.markdown(f'<div style="background:#fff;padding:4px 0;">{html}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="padding:4px 0;">{html}</div>', unsafe_allow_html=True)
 
     if v.get("note") or v.get("giudizio"):
         st.divider()
         if v.get("note"):
-            st.markdown(f'<div style="color:#111;"><span style="font-weight:700;color:#555;">📝 Note:</span> {v["note"]}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div><span style="color:#C9A84C;font-weight:700;font-size:0.8em;">📝 NOTE</span><br><span style="color:#F0EDE8;">{v["note"]}</span></div>', unsafe_allow_html=True)
         if v.get("giudizio"):
-            st.markdown(f'<div style="color:#111;margin-top:8px;"><span style="font-weight:700;color:#555;">🍷 Giudizio:</span> {v["giudizio"]}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="margin-top:10px;"><span style="color:#C9A84C;font-weight:700;font-size:0.8em;">🍷 GIUDIZIO</span><br><span style="color:#F0EDE8;">{v["giudizio"]}</span></div>', unsafe_allow_html=True)
 
 
 @st.dialog("🍷 Stappa e Giudica")
