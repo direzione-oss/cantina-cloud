@@ -1121,7 +1121,7 @@ def page_admin_dashboard(tenant):
                                error_correction=qrcode.constants.ERROR_CORRECT_M)
             qr.add_data(url_lista)
             qr.make(fit=True)
-            img_qr = qr.make_image(fill_color="#8B1A1A", back_color="white")
+            img_qr = qr.make_image(fill_color="#8B1A1A", back_color="white").convert("RGB")
             qr_w, qr_h = img_qr.size
 
             # ── Componi immagine stampabile con PIL ────────────────────
