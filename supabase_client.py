@@ -8,12 +8,29 @@ import hashlib, secrets, time, uuid
 
 BUCKET = "cantina-images"
 
+# ── Chiavi Supabase (la anon key è una chiave pubblica by design) ─────────────
+_SB_URL = "https://ltssduxqpmvuzvpitmpx.supabase.co"
+_SB_ANON = ("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+             ".eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx0c3NkdXhxcG12dXp2cGl0bXB4"
+             "Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1Nzg2MDIsImV4cCI6MjA4ODE1"
+             "NDYwMn0.ufMro1pGIoPiQ4SIKsDVTfqaV9FnadWcSjA1JBgCvhY")
+
 # ── Init ──────────────────────────────────────────────────────────────────────
+
+def _valid_jwt(key: str) -> bool:
+    """Controlla che la stringa sia un JWT formato minimo valido."""
+    return isinstance(key, str) and key.count('.') == 2 and len(key) > 100
 
 @st.cache_resource
 def init_supabase() -> Client:
-    url = st.secrets["SUPABASE_URL"]
-    key = st.secrets["SUPABASE_KEY"]
+    try:
+        url = st.secrets.get("SUPABASE_URL", _SB_URL) or _SB_URL
+        key = st.secrets.get("SUPABASE_KEY", _SB_ANON)
+    except Exception:
+        url, key = _SB_URL, _SB_ANON
+    # Se il secret è corrotto o mancante, usa la anon key pubblica
+    if not _valid_jwt(key):
+        key = _SB_ANON
     return create_client(url, key)
 
 def get_sb() -> Client:
