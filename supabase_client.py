@@ -4,7 +4,7 @@ Client Supabase con supporto multi-tenant, autenticazione custom e CRUD.
 """
 import streamlit as st
 from supabase import create_client, Client
-import hashlib, secrets, time, uuid
+import hashlib, secrets, time, uuid, datetime
 
 BUCKET = "cantina-images"
 
@@ -53,6 +53,47 @@ def verify_login(email: str, password: str) -> dict | None:
     pw_hash = hash_password(password)
     resp = sb.table("tenants").select("*").eq("email", email).eq("password_hash", pw_hash).eq("attivo", True).execute()
     return resp.data[0] if resp.data else None
+
+def generate_reset_token(email: str) -> str | None:
+    """Genera un token di reset password valido 30 minuti. Ritorna il token o None se email non trovata."""
+    sb = get_sb()
+    resp = sb.table("tenants").select("id").eq("email", email).eq("attivo", True).execute()
+    if not resp.data:
+        return None  # Non rivela se l'email esiste (sicurezza)
+    token = secrets.token_urlsafe(32)
+    expires = (datetime.datetime.now(datetime.timezone.utc)
+               + datetime.timedelta(minutes=30)).isoformat()
+    sb.table("tenants").update({
+        "reset_token": token,
+        "reset_token_expires": expires
+    }).eq("email", email).execute()
+    return token
+
+def verify_reset_token(token: str) -> dict | None:
+    """Verifica il token di reset e ritorna il tenant se valido e non scaduto."""
+    if not token or len(token) < 10:
+        return None
+    sb = get_sb()
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    resp = (sb.table("tenants")
+            .select("id, email, nome")
+            .eq("reset_token", token)
+            .gt("reset_token_expires", now)
+            .execute())
+    return resp.data[0] if resp.data else None
+
+def update_password_by_token(token: str, new_password: str) -> bool:
+    """Aggiorna la password e invalida il token. Ritorna True se riuscito."""
+    tenant = verify_reset_token(token)
+    if not tenant:
+        return False
+    sb = get_sb()
+    sb.table("tenants").update({
+        "password_hash": hash_password(new_password),
+        "reset_token": None,
+        "reset_token_expires": None
+    }).eq("id", tenant["id"]).execute()
+    return True
 
 def email_exists(email: str) -> bool:
     """Controlla se una email è già registrata."""

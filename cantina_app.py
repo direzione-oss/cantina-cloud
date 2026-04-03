@@ -338,6 +338,8 @@ def init_state():
         "cat_sel": "TUTTI",
         "login_attempts": 0,
         "login_blocked_until": None,
+        "inv_pagina": 0,
+        "inv_tipo_key": "",  # chiave per reset pagina al cambio filtri
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -370,6 +372,44 @@ params = st.query_params
 portale_slug = params.get("portale", "")
 lista_slug   = params.get("lista", "")
 lista_luogo  = params.get("luogo", "")
+reset_token_param = params.get("reset", "")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RESET PASSWORD (route pubblica: ?reset=TOKEN)
+# ─────────────────────────────────────────────────────────────────────────────
+
+if reset_token_param:
+    tenant_reset = db.verify_reset_token(reset_token_param)
+    _, col_r, _ = st.columns([1, 1.2, 1])
+    with col_r:
+        st.markdown(f"""
+        <div style="text-align:center;padding:40px 0 20px;">
+            <div style="font-size:3em;margin-bottom:8px;">🔑</div>
+            <div style="font-size:1.8em;font-weight:700;color:{TEXT_MAIN};">Reimposta Password</div>
+            <div style="color:{TEXT_MUTED};font-size:0.9em;margin-top:4px;">CantinaPro</div>
+        </div>
+        """, unsafe_allow_html=True)
+        if not tenant_reset:
+            st.error("⛔ Il link di reset non è valido o è scaduto (validità 30 minuti).")
+            st.markdown(f"[← Torna al login]({APP_BASE_URL})")
+        else:
+            st.markdown(f"<div style='text-align:center;color:{TEXT_MUTED};margin-bottom:20px;'>Stai reimpostando la password per <b>{tenant_reset['email']}</b></div>", unsafe_allow_html=True)
+            with st.form("reset_pwd_form"):
+                np1 = st.text_input("🔒 Nuova password", type="password", placeholder="Min. 8 caratteri")
+                np2 = st.text_input("🔒 Conferma nuova password", type="password", placeholder="Ripeti la password")
+                ok  = st.form_submit_button("✅ Salva nuova password", use_container_width=True, type="primary")
+            if ok:
+                if len(np1) < 8:
+                    st.error("La password deve avere almeno 8 caratteri.")
+                elif np1 != np2:
+                    st.error("Le password non coincidono.")
+                else:
+                    if db.update_password_by_token(reset_token_param, np1):
+                        st.success("✅ Password aggiornata! Ora puoi accedere con la nuova password.")
+                        st.page_link(APP_BASE_URL, label="🔑 Vai al login", help="Torna alla pagina di login")
+                    else:
+                        st.error("Errore durante il reset. Riprova o richiedi un nuovo link.")
+    st.stop()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # LISTA OSPITI PER LUOGO (accessibile via QR code senza login)
@@ -613,6 +653,43 @@ def _invia_email_notifica(nome: str, email: str, piano: str):
         pass  # Non bloccare la registrazione se email fallisce
 
 
+def _invia_email_reset(email_dest: str, token: str):
+    """Invia email con link di reset password all'utente."""
+    try:
+        smtp_host = st.secrets.get("SMTP_HOST", "")
+        smtp_port = int(st.secrets.get("SMTP_PORT", 587))
+        smtp_user = st.secrets.get("SMTP_USER", "")
+        smtp_pass = st.secrets.get("SMTP_PASS", "")
+        if not smtp_host or not smtp_user:
+            return
+        reset_url = f"{APP_BASE_URL}?reset={token}"
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = "🔑 Reimposta la tua password CantinaPro"
+        msg["From"]    = smtp_user
+        msg["To"]      = email_dest
+        corpo = f"""\
+<html><body style="font-family:Arial,sans-serif;color:#333;">
+<h2 style="color:#8B1A1A;">🍷 CantinaPro — Reimposta password</h2>
+<p>Hai richiesto il reset della password per il tuo account.</p>
+<p style="margin:24px 0;">
+  <a href="{reset_url}" style="background:#8B1A1A;color:white;text-decoration:none;
+     padding:12px 28px;border-radius:8px;font-weight:bold;display:inline-block;">
+    🔑 Reimposta la password
+  </a>
+</p>
+<p style="color:#888;font-size:0.85em;">Il link è valido per 30 minuti.<br>
+Se non hai richiesto il reset, ignora questa email.</p>
+<p style="color:#888;font-size:0.8em;">Oppure copia questo indirizzo nel browser:<br>
+<code style="color:#8B1A1A;">{reset_url}</code></p>
+</body></html>"""
+        msg.attach(MIMEText(corpo, "html"))
+        with smtplib.SMTP(smtp_host, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.sendmail(smtp_user, email_dest, msg.as_string())
+    except Exception:
+        pass
+
 def _banner_trial(user: dict):
     """Mostra banner se l'account è in periodo di trial."""
     if user.get("piano") != "trial":
@@ -684,6 +761,21 @@ def show_login():
                         else:
                             st.error(f"❌ Credenziali non valide. ({_att}/5 tentativi)")
             st.markdown("</div>", unsafe_allow_html=True)
+
+            # ── DIMENTICATO LA PASSWORD ────────────────────────────────────
+            with st.expander("🔑 Hai dimenticato la password?"):
+                with st.form("forgot_form"):
+                    email_forgot = st.text_input("La tua email", placeholder="nome@email.com", key="forgot_email")
+                    sub_forgot   = st.form_submit_button("📧 Invia link di reset", use_container_width=True)
+                if sub_forgot:
+                    if not email_forgot.strip():
+                        st.error("Inserisci la tua email.")
+                    else:
+                        token_r = db.generate_reset_token(email_forgot.strip().lower())
+                        # Sempre mostrare lo stesso messaggio (security: non rivela se email esiste)
+                        if token_r:
+                            _invia_email_reset(email_forgot.strip().lower(), token_r)
+                        st.success("📬 Se l'email è registrata, riceverai un link entro pochi minuti. Controlla anche lo spam.")
 
         # ── TAB REGISTRAZIONE ──────────────────────────────────────────────────
         with tab_reg:
@@ -1785,8 +1877,38 @@ def grid_vini(tenant, tipo="vini"):
 
     st.markdown(f"**{len(vini_f)} bottiglie trovate**")
 
+    # ── PAGINAZIONE ──────────────────────────────────────────────────────────
+    PER_PAG = 50
+    n_tot   = len(vini_f)
+    n_pag   = max(1, (n_tot + PER_PAG - 1) // PER_PAG)
+
+    # Reset pagina se cambiano i filtri (chiave = combinazione filtri attivi)
+    _filtro_key = f"{tipo}|{txt}|{luogo_f}|{cat_f}|{fmt_f}"
+    if st.session_state.get("inv_tipo_key") != _filtro_key:
+        st.session_state.inv_pagina  = 0
+        st.session_state.inv_tipo_key = _filtro_key
+
+    pg = st.session_state.inv_pagina
+    pg = max(0, min(pg, n_pag - 1))  # clamp sicuro
+    st.session_state.inv_pagina = pg
+
+    inizio = pg * PER_PAG
+    fine   = min(inizio + PER_PAG, n_tot)
+    vini_pag = vini_f[inizio:fine]
+
+    if n_pag > 1:
+        pa1, pa2, pa3 = st.columns([1, 3, 1])
+        if pa1.button("← Prec.", disabled=(pg == 0), key=f"pag_prec_{tipo}", use_container_width=True):
+            st.session_state.inv_pagina = pg - 1; st.rerun()
+        pa2.markdown(
+            f"<div style='text-align:center;color:{TEXT_MUTED};font-size:0.85em;padding-top:6px;'>"
+            f"Pagina <b>{pg+1}</b> di <b>{n_pag}</b> · {inizio+1}–{fine} di {n_tot}"
+            f"</div>", unsafe_allow_html=True)
+        if pa3.button("Succ. →", disabled=(pg >= n_pag-1), key=f"pag_next_{tipo}", use_container_width=True):
+            st.session_state.inv_pagina = pg + 1; st.rerun()
+
     cols = st.columns(3)
-    for j, v in enumerate(vini_f):
+    for j, v in enumerate(vini_pag):
         with cols[j % 3]:
             q = to_int(v.get("qta",0))
             cat = v.get("tipo_cat","")
