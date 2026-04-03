@@ -950,25 +950,46 @@ def page_superadmin_settings():
 
 @st.dialog("📖 Scheda Tecnica")
 def dialog_scheda(v):
-    c1,c2 = st.columns([1,1.5])
+    c1, c2 = st.columns([1, 1.5])
     with c1:
-        if v.get("foto_url"): st.image(v["foto_url"], use_container_width=True)
-        else: st.markdown("<div style='text-align:center;padding:40px;color:#555;'>📷 Nessuna foto</div>", unsafe_allow_html=True)
+        if v.get("foto_url"):
+            st.image(v["foto_url"], use_container_width=True)
+        else:
+            st.markdown("<div style='text-align:center;padding:40px;color:#888;font-size:2em;'>📷</div>", unsafe_allow_html=True)
     with c2:
-        st.markdown(f"### {v['nome']}")
-        st.markdown(f"**Cantina:** {v.get('azienda','N.D.')}")
-        st.markdown(f"**Annata:** {v.get('annata','N.D.')} &nbsp;|&nbsp; **Gradi:** {v.get('gradi','N.D.')}%")
-        st.markdown(f"**Vitigno:** {v.get('vitigno','N.D.')}")
-        st.markdown(f"**Tipo:** {v.get('tipo_vino','N.D.')} &nbsp;|&nbsp; **Zucchero:** {v.get('zucchero','N.S.')}")
-        st.markdown(f"**Formato:** {v.get('formato','0.75 L')}")
-        precio = to_float(v.get("prezzo",0))
-        st.markdown(f"💶 **€ {precio:,.2f}**")
-        st.markdown(f"📍 **{v.get('luogo','Casa Principale')}** {'· 📦 '+v.get('collocazione','') if v.get('collocazione') else ''}")
-        if v.get("provenienza"): st.markdown(f"🎁 **Fonte:** {v.get('provenienza')}")
+        def r(icon, label, val):
+            if not val or val in ("N.D.", "", "0", "0.0", "0,00"): val = "—"
+            return (f'<div style="margin-bottom:10px;line-height:1.4;">'
+                    f'<span style="color:#8B1A1A;font-weight:700;">{icon} {label}</span>'
+                    f'<br><span style="color:#111;font-size:0.97em;">{val}</span></div>')
+
+        precio = to_float(v.get("prezzo", 0))
+        luogo = v.get("luogo", "—")
+        colloc = f' · {v.get("collocazione")}' if v.get("collocazione") else ""
+        prov = v.get("provenienza", "")
+
+        html = (
+            f'<h3 style="color:#8B1A1A;margin-bottom:14px;font-size:1.3em;">{v["nome"]}</h3>'
+            + r("🏭", "Cantina", v.get("azienda", ""))
+            + r("📅", "Annata", v.get("annata", ""))
+            + r("📊", "Gradi", f'{v.get("gradi","")}%' if v.get("gradi") else "")
+            + r("🍇", "Vitigno", v.get("vitigno", ""))
+            + r("🍾", "Tipo", v.get("tipo_vino", ""))
+            + r("🍬", "Zucchero", v.get("zucchero", ""))
+            + r("📏", "Formato", v.get("formato", ""))
+            + r("💶", "Prezzo", f"€ {precio:,.2f}")
+            + r("📍", "Sede", f"{luogo}{colloc}")
+            + (r("🎁", "Fonte", prov) if prov else "")
+        )
+        st.markdown(f'<div style="background:#fff;padding:4px 0;">{html}</div>', unsafe_allow_html=True)
+
     if v.get("note") or v.get("giudizio"):
         st.divider()
-        if v.get("note"):    st.markdown(f"📝 **Note:** {v.get('note')}")
-        if v.get("giudizio"): st.markdown(f"🍷 **Giudizio:** {v.get('giudizio')}")
+        if v.get("note"):
+            st.markdown(f'<div style="color:#111;"><span style="font-weight:700;color:#555;">📝 Note:</span> {v["note"]}</div>', unsafe_allow_html=True)
+        if v.get("giudizio"):
+            st.markdown(f'<div style="color:#111;margin-top:8px;"><span style="font-weight:700;color:#555;">🍷 Giudizio:</span> {v["giudizio"]}</div>', unsafe_allow_html=True)
+
 
 @st.dialog("🍷 Stappa e Giudica")
 def dialog_stappa(v, tenant_id, tipo):
