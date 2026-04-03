@@ -390,18 +390,17 @@ if lista_slug:
     </style>
     """, unsafe_allow_html=True)
 
-    # Hero
+    # Hero — uso HTML compatto su una sola stringa (evita parsing markdown multiline)
     logo = tenant.get("logo_url", "")
-    logo_html = f'<img src="{logo}" style="height:64px;border-radius:50%;margin-bottom:12px;display:block;margin-left:auto;margin-right:auto;"/>' if logo else ""
-    st.markdown(f"""
-    <div class="lista-hero">
-        {logo_html}
-        <div style="font-size:2em;margin-bottom:8px;">🍷</div>
-        <div class="lista-cantina">{tenant['nome']}</div>
-        <div class="lista-sede">📍 {titolo_luogo}</div>
-        <div class="lista-count">{len(vini_lista)} vini disponibili</div>
-    </div>
-    """, unsafe_allow_html=True)
+    logo_tag = f'<img src="{logo}" style="height:64px;border-radius:50%;margin-bottom:12px;display:block;margin:0 auto 12px;"/>' if logo else ''
+    n = len(vini_lista)
+    hero_html = (f'<div class="lista-hero">{logo_tag}'
+                 f'<div style="font-size:2.4em;margin-bottom:6px;">\U0001f377</div>'
+                 f'<div class="lista-cantina">{tenant["nome"]}</div>'
+                 f'<div class="lista-sede">\U0001f4cd\u00a0{titolo_luogo}</div>'
+                 f'<div class="lista-count">{n} vin{"o" if n==1 else "i"} disponibil{"e" if n==1 else "i"}</div>'
+                 f'</div>')
+    st.markdown(hero_html, unsafe_allow_html=True)
 
     # Lista per categoria
     for cat in ord_cat:
@@ -680,22 +679,65 @@ def pp(t): return str(t).replace("€","E").encode("latin-1","replace").decode("
 # ─────────────────────────────────────────────────────────────────────────────
 
 def genera_pdf_lista(lista, titolo):
+    from collections import OrderedDict
     pdf = FPDF(orientation="L", unit="mm", format="A4")
-    pdf.add_page(); pdf.set_font("Arial","B",16)
-    pdf.cell(0,10,pp(titolo),ln=True,align="C"); pdf.ln(4)
-    pdf.set_font("Arial","B",9); pdf.set_fill_color(139,26,26); pdf.set_text_color(255,255,255)
-    hdrs = ["ID","Nome","Cantina","Sede / Pos.","Qta","Prezzo"]
-    wws  = [14, 75, 50, 40, 14, 28]
-    for i,h in enumerate(hdrs): pdf.cell(wws[i],9,h,1,0,"C",True)
-    pdf.set_text_color(0,0,0); pdf.ln(); pdf.set_font("Arial","",9)
-    for i,v in enumerate(lista):
-        loc = f"{pp(v.get('luogo',''))} · {pp(v.get('collocazione',''))}" if v.get("collocazione") else pp(v.get("luogo",""))
-        row = [f"#{v.get('id',i+1)}",pp(v['nome']),pp(v.get('azienda','')),loc,str(v['qta']),f"E {v.get('prezzo',0):.2f}"]
-        fill = i%2==0
-        if fill: pdf.set_fill_color(245,240,240)
-        for idx,txt in enumerate(row): pdf.cell(wws[idx],7,txt,1,0,"L",fill)
+    pdf.set_margins(10, 10, 10)
+    pdf.add_page()
+    # Titolo
+    pdf.set_font("Arial", "B", 16)
+    pdf.set_text_color(139, 26, 26)
+    pdf.cell(0, 10, pp(titolo), ln=True, align="C")
+    pdf.set_text_color(100, 100, 100)
+    pdf.set_font("Arial", "", 8)
+    pdf.cell(0, 5, f"Stampato il {datetime.date.today().strftime('%d/%m/%Y')}  -  {len(lista)} etichette", ln=True, align="C")
+    pdf.ln(3)
+    hdrs = ["N.", "Nome Vino", "Azienda", "Sede", "Annata", "Formato", "Qta", "Prezzo"]
+    wws  = [10, 70, 50, 35, 18, 30, 13, 28]
+    W    = sum(wws)
+    def stampa_header():
+        pdf.set_font("Arial", "B", 8)
+        pdf.set_fill_color(139, 26, 26)
+        pdf.set_text_color(255, 255, 255)
+        for i, h in enumerate(hdrs):
+            pdf.cell(wws[i], 8, h, 1, 0, "C", True)
+        pdf.set_text_color(0, 0, 0)
         pdf.ln()
+    # Raggruppa per categoria
+    cat_map = OrderedDict()
+    for v in lista:
+        cat = v.get("tipo_cat", "Altro") or "Altro"
+        cat_map.setdefault(cat, []).append(v)
+    ord_cat = [c for c in CATEGORIE_BASE if c in cat_map] + \
+              [c for c in cat_map if c not in CATEGORIE_BASE]
+    for cat in ord_cat:
+        vini_cat = sorted(cat_map[cat], key=lambda x: x.get("nome", ""))
+        # Intestazione categoria
+        pdf.set_font("Arial", "B", 10)
+        pdf.set_fill_color(245, 236, 236)
+        pdf.set_text_color(139, 26, 26)
+        pdf.cell(W, 8, f"  {pp(cat)}  ({len(vini_cat)})", 1, 1, "L", True)
+        pdf.set_text_color(0, 0, 0)
+        stampa_header()
+        pdf.set_font("Arial", "", 8)
+        for i, v in enumerate(vini_cat):
+            row = [
+                str(i + 1),
+                pp(v.get("nome", "")),
+                pp(v.get("azienda", "")),
+                pp(v.get("luogo", "")),
+                pp(v.get("annata", "")),
+                pp(v.get("formato", "")),
+                str(to_int(v.get("qta", 0))),
+                f"E {to_float(v.get('prezzo', 0)):.2f}",
+            ]
+            fill = i % 2 == 0
+            pdf.set_fill_color(252, 248, 248) if fill else pdf.set_fill_color(255, 255, 255)
+            for idx, txt in enumerate(row):
+                pdf.cell(wws[idx], 6, txt, 1, 0, "L", fill)
+            pdf.ln()
+        pdf.ln(3)
     return bytes(pdf.output())
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SIDEBAR NAVIGATION
