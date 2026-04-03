@@ -1476,7 +1476,6 @@ def page_admin_dashboard(tenant):
     c3.metric("🥃 Mignon", f"{tm:,}")
     c4.metric("💶 Valore Mignon", f"€ {vm:,.0f}")
 
-
     st.markdown("---")
 
     # ── Sedi ──────────────────────────────────────────────────────────
@@ -1487,7 +1486,9 @@ def page_admin_dashboard(tenant):
         st.markdown("#### 🏠 Le Tue Sedi")
         cols = st.columns(min(len(sedi), 6))
         for i, sede in enumerate(sedi):
-            vs = [v for v in vini if v.get("luogo")==sede and v.get("tipo_cat")!="Provati"]
+            vs = [v for v in vini if v.get("luogo")==sede
+                  and v.get("tipo_cat")!="Provati"
+                  and to_int(v.get("qta",0)) > 0]
             bt, val = calcola_totali(vs)
             with cols[i % 6]:
                 st.markdown(f"""
@@ -1497,6 +1498,24 @@ def page_admin_dashboard(tenant):
                     <div style="font-size:0.78em;color:{ACCENT};margin-top:4px;">€ {val:,.0f}</div>
                 </div>
                 """, unsafe_allow_html=True)
+
+    # ── Bottiglie Terminate ──────────────────────────────────────────
+    terminate = [v for v in vini if to_int(v.get("qta",0)) == 0
+                 and v.get("tipo_cat") != "Provati"
+                 and v.get("nome","").strip()
+                 and not v.get("nome","").startswith("[Sede:")]
+    if terminate:
+        with st.expander(f"🍾 Bottiglie Terminate ({len(terminate)})", expanded=False):
+            for v in sorted(terminate, key=lambda x: x.get("nome","")):
+                vid = str(v.get("id",""))[:8]
+                sede_orig = v.get("luogo", "—")
+                st.markdown(f"""<div style="padding:6px 10px;border-bottom:1px solid #1e1e1e;
+                    font-size:0.88em;display:flex;justify-content:space-between;">
+                    <span><code style="color:#888;">{vid}</code> &nbsp;
+                    <b>{v.get('nome','')}</b>
+                    <span style="color:{TEXT_MUTED};"> · {v.get('azienda','')}</span></span>
+                    <span style="color:{TEXT_MUTED};font-size:0.85em;">ex: {sede_orig}</span>
+                </div>""", unsafe_allow_html=True)
 
 
     st.markdown("---")
