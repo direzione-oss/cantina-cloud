@@ -814,6 +814,162 @@ def genera_pdf_lista(lista, titolo):
     return bytes(pdf.output())
 
 
+def genera_pdf_catalogo(lista, nome_cantina="Cantina"):
+    """PDF catalogo completo: A4 verticale, schede dettagliate per categoria."""
+    from collections import OrderedDict
+    import datetime as _dt
+
+    pdf = FPDF(orientation="P", unit="mm", format="A4")
+    pdf.set_margins(14, 14, 14)
+    pdf.set_auto_page_break(True, margin=14)
+
+    # Raggruppa e ordina
+    cat_map = OrderedDict()
+    for v in lista:
+        cat = v.get("tipo_cat", "Altro") or "Altro"
+        cat_map.setdefault(cat, []).append(v)
+    ord_cat = [c for c in CATEGORIE_BASE if c in cat_map] + \
+              [c for c in cat_map if c not in CATEGORIE_BASE]
+
+    totale = sum(to_int(v.get("qta", 0)) for v in lista)
+    valore = sum(to_float(v.get("prezzo", 0)) * to_int(v.get("qta", 0)) for v in lista)
+    PAGE_W = 182  # 210 - 14*2
+
+    def _hdr_pagina():
+        """Header di ogni pagina."""
+        pdf.set_font("Arial", "B", 7)
+        pdf.set_text_color(180, 180, 180)
+        pdf.cell(0, 5, f"CATALOGO VINI  {pp(nome_cantina).upper()}  |  {_dt.date.today().strftime('%d/%m/%Y')}",
+                 ln=True, align="C")
+        pdf.set_draw_color(200, 200, 200)
+        pdf.line(14, pdf.get_y(), 196, pdf.get_y())
+        pdf.ln(2)
+        pdf.set_text_color(0, 0, 0)
+
+    # ── PAGINA DI COPERTINA ─────────────────────────────────────────────────
+    pdf.add_page()
+    pdf.ln(20)
+    pdf.set_font("Arial", "B", 28)
+    pdf.set_text_color(139, 26, 26)
+    pdf.cell(0, 12, "CATALOGO VINI", ln=True, align="C")
+    pdf.set_font("Arial", "B", 18)
+    pdf.set_text_color(80, 80, 80)
+    pdf.cell(0, 10, pp(nome_cantina), ln=True, align="C")
+    pdf.ln(6)
+
+    pdf.set_draw_color(139, 26, 26)
+    pdf.set_line_width(0.5)
+    pdf.line(40, pdf.get_y(), 170, pdf.get_y())
+    pdf.ln(8)
+
+    # Riepilogo numerico
+    pdf.set_font("Arial", "", 11)
+    pdf.set_text_color(60, 60, 60)
+    pdf.cell(0, 8, f"Etichette: {len(lista)}   |   Bottiglie: {totale}   |   Valore: E {valore:,.2f}", ln=True, align="C")
+    pdf.set_font("Arial", "", 9)
+    pdf.cell(0, 6, f"Generato il {_dt.date.today().strftime('%d %B %Y')}", ln=True, align="C")
+    pdf.ln(12)
+
+    # Indice categorie
+    pdf.set_font("Arial", "B", 12)
+    pdf.set_text_color(139, 26, 26)
+    pdf.cell(0, 8, "CATEGORIE", ln=True, align="C")
+    pdf.ln(2)
+    for cat in ord_cat:
+        n = len(cat_map[cat])
+        q = sum(to_int(v.get("qta", 0)) for v in cat_map[cat])
+        pdf.set_font("Arial", "", 10)
+        pdf.set_text_color(40, 40, 40)
+        pdf.cell(90, 7, f"  {pp(cat)}", 0, 0, "L")
+        pdf.cell(92, 7, f"{n} etichette  /  {q} bottiglie", 0, 1, "R")
+        pdf.set_draw_color(220, 220, 220)
+        pdf.line(14, pdf.get_y(), 196, pdf.get_y())
+
+    # ── PAGINE PER CATEGORIA ────────────────────────────────────────────────
+    COL_W  = [8, 62, 38, 18, 12, 26, 14, 4]   # N | Nome | Azienda | Annata | Gradi | Luogo/Pos | Prezzo | Qta + filler
+    # Layout colonne dettaglio (larghezza totale = PAGE_W)
+    C = [8, 56, 36, 18, 12, 24, 20, 8]        # N | Nome | Azienda | Annata | Gradi | Sede | Prezzo | Qta
+
+    for cat in ord_cat:
+        vini_cat = sorted(cat_map[cat], key=lambda x: x.get("nome", ""))
+
+        pdf.add_page()
+        _hdr_pagina()
+
+        # Intestazione categoria
+        pdf.set_fill_color(139, 26, 26)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font("Arial", "B", 12)
+        ql = sum(to_int(v.get("qta", 0)) for v in vini_cat)
+        pdf.cell(PAGE_W, 9,
+                 f"  {pp(cat).upper()}  —  {len(vini_cat)} etichette  /  {ql} bottiglie",
+                 1, 1, "L", True)
+        pdf.ln(2)
+
+        # Header tabella
+        hdrs2 = ["N.", "Nome Vino", "Azienda/Produttore", "Annata", "Gradi", "Sede / Pos.", "Prezzo", "Qta"]
+        pdf.set_fill_color(240, 235, 235)
+        pdf.set_text_color(100, 30, 30)
+        pdf.set_font("Arial", "B", 7)
+        for i, h in enumerate(hdrs2):
+            pdf.cell(C[i], 6, h, 1, 0, "C", True)
+        pdf.ln()
+
+        pdf.set_font("Arial", "", 8)
+        pdf.set_text_color(0, 0, 0)
+
+        for idx, v in enumerate(vini_cat):
+            fill = idx % 2 == 0
+            pdf.set_fill_color(252, 248, 248) if fill else pdf.set_fill_color(255, 255, 255)
+
+            nome = pp(v.get("nome", ""))[:35]
+            az   = pp(v.get("azienda", ""))[:28]
+            sede = pp(v.get("luogo", ""))
+            coll = pp(v.get("collocazione", ""))
+            sede_txt = f"{sede} / {coll}" if coll else sede
+            sede_txt = sede_txt[:22]
+
+            row = [
+                str(idx + 1),
+                nome,
+                az,
+                pp(v.get("annata", "")),
+                pp(v.get("gradi", "")),
+                sede_txt,
+                f"E {to_float(v.get('prezzo', 0)):.2f}",
+                str(to_int(v.get("qta", 0))),
+            ]
+            for i, txt in enumerate(row):
+                pdf.cell(C[i], 6, txt, 1, 0, "C" if i in (0, 3, 4, 7) else "L", fill)
+            pdf.ln()
+
+            # Riga dettagli extra (vitigno, tipo, zucchero, formato, note)
+            vitigno = pp(v.get("vitigno", ""))
+            tipo    = pp(v.get("tipo_vino", ""))
+            zuc     = pp(v.get("zucchero", ""))
+            fmt     = pp(v.get("formato", ""))
+            note    = pp(v.get("note", ""))[:60]
+            dettagli = []
+            if vitigno: dettagli.append(f"Vitigno: {vitigno}")
+            if tipo:    dettagli.append(f"Tipo: {tipo}")
+            if zuc:     dettagli.append(f"Zucchero: {zuc}")
+            if fmt:     dettagli.append(f"Formato: {fmt}")
+            if note:    dettagli.append(f"Note: {note}")
+            if dettagli:
+                pdf.set_font("Arial", "I", 6.5)
+                pdf.set_text_color(100, 100, 100)
+                pdf.set_fill_color(248, 245, 245) if fill else pdf.set_fill_color(255, 255, 255)
+                pdf.cell(PAGE_W, 4.5, "    " + "   |   ".join(dettagli), 0, 1, "L", fill)
+                pdf.set_font("Arial", "", 8)
+                pdf.set_text_color(0, 0, 0)
+
+        pdf.ln(4)
+
+    return bytes(pdf.output())
+
+
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # SIDEBAR NAVIGATION
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1299,7 +1455,7 @@ def page_admin_dashboard(tenant):
     st.markdown("---")
 
     # ── PDF ────────────────────────────────────────────────
-    col1, col2, _ = st.columns([1, 1, 2])
+    col1, col2, col3 = st.columns(3)
     with col1:
         if st.button("📄 Lista PDF completa", use_container_width=True, type="secondary"):
             giacenza = [v for v in vini if to_int(v.get("qta",0))>0 and v.get("tipo_cat")!="Provati"]
@@ -1316,6 +1472,22 @@ def page_admin_dashboard(tenant):
                 st.download_button("📥 Scarica Divisa", data=pdf,
                                    file_name=f"divisa_{sede_sel.lower().replace(' ','_')}.pdf",
                                    mime="application/pdf")
+    with col3:
+        if st.button("📚 Catalogo PDF completo", use_container_width=True, type="primary",
+                     help="PDF A4 con scheda dettagliata per ogni vino: vitigno, tipo, zucchero, gradi, posizione, note — diviso per categoria"):
+            giacenza = [v for v in vini if to_int(v.get("qta",0))>0 and v.get("tipo_cat")!="Provati"]
+            with st.spinner("Generazione catalogo in corso..."):
+                pdf_cat = genera_pdf_catalogo(giacenza, tenant.get("nome","Cantina"))
+            st.download_button(
+                "📥 Scarica Catalogo",
+                data=pdf_cat,
+                file_name=f"catalogo_{tenant.get('nome','cantina').lower().replace(' ','_')}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                type="primary"
+            )
+
+
 
 def grid_vini(tenant, tipo="vini"):
     tid = tenant["id"]
