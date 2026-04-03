@@ -272,7 +272,24 @@ def init_state():
 init_state()
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PORTALE PUBBLICO (accessibile senza login via ?portale=slug)
+# UTILITY (definite subito: servono nei handler pubblici senza login)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def to_float(x):
+    try: return float(str(x).replace(",", "."))
+    except: return 0.0
+
+def to_int(x):
+    try: return int(str(x).split()[0])
+    except: return 0
+
+def calcola_totali(data):
+    bottiglie = sum(to_int(v.get("qta",0)) for v in data if v.get("tipo_cat") != "Provati")
+    valore = sum(to_int(v.get("qta",0)) * to_float(v.get("prezzo",0)) for v in data if v.get("tipo_cat") != "Provati")
+    return bottiglie, valore
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PAGINE PUBBLICHE (accessibili senza login via query params)
 # ─────────────────────────────────────────────────────────────────────────────
 
 params = st.query_params
@@ -616,21 +633,8 @@ def show_login():
         st.markdown(f"<div style='text-align:center;margin-top:20px;color:{TEXT_MUTED};font-size:0.78em;'>CantinaPro Platform · &copy; 2025 SerraStudio</div>", unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# UTILITY
+# UTILITY (proseguo — to_float/to_int/calcola_totali già definite sopra)
 # ─────────────────────────────────────────────────────────────────────────────
-
-def to_float(x):
-    try: return float(str(x).replace(",", "."))
-    except: return 0.0
-
-def to_int(x):
-    try: return int(str(x).split()[0])
-    except: return 0
-
-def calcola_totali(data):
-    bottiglie = sum(to_int(v.get("qta",0)) for v in data if v.get("tipo_cat") != "Provati")
-    valore = sum(to_int(v.get("qta",0)) * to_float(v.get("prezzo",0)) for v in data if v.get("tipo_cat") != "Provati")
-    return bottiglie, valore
 
 def calcola_formato(inp):
     mappa = {0.1875:"Piccolo",0.375:"Demi",0.75:"Standard",1.5:"Magnum",3.0:"Jeroboam",
