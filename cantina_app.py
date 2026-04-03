@@ -54,12 +54,27 @@ p, h1, h2, h3, h4, h5, h6, li, span, label,
 [data-testid="stMarkdownContainer"] p,
 [data-testid="stMarkdownContainer"] span {{ color: {TEXT_MAIN} !important; }}
 
-/* ── DIALOG / MODAL: tema scuro come l'app ── */
-[data-testid="stDialog"] > div {{
+/* ── DIALOG / MODAL: sfondo scuro — selettori multipli per Streamlit ── */
+div[role="dialog"],
+[data-baseweb="dialog"],
+[data-baseweb="modal"],
+[data-baseweb="block"][role="dialog"],
+[data-testid="stModal"],
+[data-testid="stDialog"],
+[data-testid="stDialog"] > div,
+[data-testid="stDialog"] > div > div {{
     background-color: #1A1A1A !important;
     border: 1px solid #2A2A2A !important;
     border-radius: 16px !important;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.8) !important;
 }}
+/* Overlay */
+[data-baseweb="modal-backdrop"],
+[data-baseweb="overlay"] {{
+    background: rgba(0,0,0,0.75) !important;
+    backdrop-filter: blur(4px) !important;
+}}
+/* Testo nel dialog */
 [data-testid="stDialog"] p,
 [data-testid="stDialog"] span,
 [data-testid="stDialog"] h1,
@@ -67,16 +82,20 @@ p, h1, h2, h3, h4, h5, h6, li, span, label,
 [data-testid="stDialog"] h3,
 [data-testid="stDialog"] h4,
 [data-testid="stDialog"] div,
-[data-testid="stDialog"] label {{
-    color: {TEXT_MAIN} !important;
-}}
-[data-testid="stDialog"] [data-testid="stMarkdownContainer"] p,
-[data-testid="stDialog"] [data-testid="stMarkdownContainer"] span {{
+[data-testid="stDialog"] label,
+div[role="dialog"] p,
+div[role="dialog"] span,
+div[role="dialog"] label {{
     color: {TEXT_MAIN} !important;
 }}
 /* Titolo dialog */
-[data-testid="stDialog"] [data-testid="stDialogTitle"] p {{
+[data-testid="stDialogTitle"] p, [data-testid="stDialogTitle"] * {{
     color: {ACCENT} !important; font-weight: 700 !important;
+}}
+/* Input dentro dialog */
+div[role="dialog"] input, div[role="dialog"] textarea {{
+    background: #252525 !important; color: {TEXT_MAIN} !important;
+    border-color: #3A3A3A !important;
 }}
 
 
@@ -224,7 +243,9 @@ div[role="tooltip"],
     color: {TEXT_MAIN} !important;
     border: 1px solid #3A3A3A !important;
     border-radius: 8px !important;
-    font-size: 0.82em !important;
+    font-size: 1em !important;
+    padding: 8px 12px !important;
+    line-height: 1.5 !important;
     box-shadow: 0 4px 12px rgba(0,0,0,0.6) !important;
 }}
 /* Freccia del tooltip */
