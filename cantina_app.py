@@ -214,6 +214,25 @@ details summary {{ color: {TEXT_MAIN} !important; font-weight: 500 !important; }
 /* ── ALERT BOXES ── */
 [data-testid="stAlert"] p, [data-testid="stAlert"] div {{ color: {TEXT_MAIN} !important; }}
 
+/* ── TOOLTIP scuri ── */
+[data-testid="stTooltipContent"],
+[data-baseweb="tooltip"] div,
+div[role="tooltip"],
+.stTooltipContent,
+[data-placement] div[role="tooltip"] {{
+    background-color: #252525 !important;
+    color: {TEXT_MAIN} !important;
+    border: 1px solid #3A3A3A !important;
+    border-radius: 8px !important;
+    font-size: 0.82em !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.6) !important;
+}}
+/* Freccia del tooltip */
+[data-baseweb="tooltip"] [data-placement] {{
+    background-color: #252525 !important;
+}}
+
+
 /* ── CARD VINO ── */
 .wine-card {{
     background: {CARD_BG}; border-radius: 14px; border: 1px solid #252525;
