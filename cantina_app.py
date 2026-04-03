@@ -1348,15 +1348,15 @@ def page_admin_dashboard(tenant):
 
     st.markdown("---")
 
-    # Sedi
-    sedi = sorted(set(v.get("luogo","") for v in vini if v.get("luogo")))
+    # ── Sedi ──────────────────────────────────────────────────────────
+    sedi = sorted(set(v.get("luogo","") for v in vini if v.get("luogo") and v.get("luogo") != "None"))
     if sedi:
         st.markdown("#### 🏠 Le Tue Sedi")
-        cols = st.columns(len(sedi))
+        cols = st.columns(min(len(sedi), 6))
         for i, sede in enumerate(sedi):
             vs = [v for v in vini if v.get("luogo")==sede and v.get("tipo_cat")!="Provati"]
             bt, val = calcola_totali(vs)
-            with cols[i]:
+            with cols[i % 6]:
                 st.markdown(f"""
                 <div class="stat-box">
                     <div class="val">{bt}</div>
@@ -1367,7 +1367,7 @@ def page_admin_dashboard(tenant):
 
     st.markdown("---")
 
-    # ── PDF: chiamate dirette, no cache, no session_state ────────────
+    # ── PDF Downloads ──────────────────────────────────────────────────
     giacenza = [v for v in vini if to_int(v.get("qta",0))>0 and v.get("tipo_cat")!="Provati"]
     nome_f   = tenant.get("nome","cantina").lower().replace(" ","_")
 
@@ -1375,10 +1375,13 @@ def page_admin_dashboard(tenant):
 
     with col1:
         if giacenza:
-            _b = genera_pdf_lista(giacenza, f"Giacenza - {tenant['nome']}")
-            st.download_button("📄 Lista PDF", data=_b,
-                               file_name="cantina.pdf", mime="application/pdf",
-                               use_container_width=True, key="dl_lista")
+            try:
+                _b = genera_pdf_lista(giacenza, f"Giacenza - {tenant['nome']}")
+                st.download_button("📄 Lista PDF", data=_b,
+                                   file_name="cantina.pdf", mime="application/pdf",
+                                   use_container_width=True, key="dl_lista")
+            except Exception as e:
+                st.error(f"Errore PDF lista: {e}")
 
     with col2:
         if sedi:
@@ -1388,98 +1391,26 @@ def page_admin_dashboard(tenant):
                          and v.get("tipo_cat")!="Provati"
                          and to_int(v.get("qta",0))>0]
             if vini_sede:
-                _b2 = genera_pdf_lista(vini_sede, f"Lista - {sede_sel} ({tenant['nome']})")
-                st.download_button(f"📝 Divisa {sede_sel}", data=_b2,
-                                   file_name=f"divisa_{sede_sel.lower().replace(' ','_')}.pdf",
-                                   mime="application/pdf",
-                                   use_container_width=True, key="dl_divisa")
+                try:
+                    _b2 = genera_pdf_lista(vini_sede, f"Lista - {sede_sel} ({tenant['nome']})")
+                    st.download_button(f"📝 Divisa {sede_sel}", data=_b2,
+                                       file_name=f"divisa_{sede_sel.lower().replace(' ','_')}.pdf",
+                                       mime="application/pdf",
+                                       use_container_width=True, key="dl_divisa")
+                except Exception as e:
+                    st.error(f"Errore PDF divisa: {e}")
 
     with col3:
         if giacenza:
-            _b3 = genera_pdf_catalogo(giacenza, tenant.get("nome","Cantina"))
-            st.download_button("📚 Catalogo PDF completo", data=_b3,
-                               file_name=f"catalogo_{nome_f}.pdf",
-                               mime="application/pdf",
-                               use_container_width=True, type="primary",
-                               key="dl_cat")
-
-    st.markdown("---")
-
-    # ── QR CODE PER SEDE ─────────────────────────────────────────────
-    slug = tenant.get("portale_slug", "")
-    if sedi and slug:
-        st.markdown(f"""<div style='font-size:1em;font-weight:600;color:{ACCENT};margin-bottom:12px;'>
-            📱 Lista Ospiti — QR Code per Sede
-            <div style='font-size:0.75em;font-weight:400;color:#888;margin-top:4px;'>
-            Stampa il QR e consegnalo agli ospiti: scannerizzano e vedono la lista vini in tempo reale.
-            </div></div>""", unsafe_allow_html=True)
-
-        import qrcode, urllib.parse
-        qr_cols = st.columns(min(len(sedi), 4))
-        for i, sede in enumerate(sedi):
-            url_lista = f"https://cantina-cloud-gian.streamlit.app?lista={slug}&luogo={urllib.parse.quote(sede)}"
-            n_vini = len([v for v in vini if v.get("luogo")==sede and v.get("tipo_cat")!="Provati" and to_int(v.get("qta",0))>0])
-
-            qr = qrcode.QRCode(version=1, box_size=8, border=2,
-                               error_correction=qrcode.constants.ERROR_CORRECT_M)
-            qr.add_data(url_lista)
-            qr.make(fit=True)
-            img_qr = qr.make_image(fill_color="#8B1A1A", back_color="white").convert("RGB")
-            qr_w, qr_h = img_qr.size
-
-            card_w = qr_w + 60
-            card_h = qr_h + 200
-            card = Image.new("RGB", (card_w, card_h), color="#FFFFFF")
-            from PIL import ImageDraw
-            draw = ImageDraw.Draw(card)
-            draw.rectangle([0, 0, card_w, 60], fill="#8B1A1A")
-            draw.text((card_w//2, 30), "🍷", fill="white", anchor="mm")
-            draw.rectangle([0, 60, card_w, 120], fill="#F9F4F4")
-            draw.text((card_w//2, 90), tenant.get("nome","Cantina")[:30], fill="#8B1A1A", anchor="mm")
-            draw.text((card_w//2, 120), f"📍  {sede}", fill="#555555", anchor="mm")
-            card.paste(img_qr, (30, 145))
-            y_txt = 145 + qr_h + 12
-            draw.rectangle([0, y_txt-4, card_w, card_h], fill="#F9F4F4")
-            draw.text((card_w//2, y_txt+10), "Scansiona per vedere la lista vini", fill="#8B1A1A", anchor="mm")
-            draw.text((card_w//2, y_txt+28), f"{n_vini} etichette disponibili", fill="#999999", anchor="mm")
-            draw.rectangle([0, 0, card_w-1, card_h-1], outline="#CCCCCC", width=2)
-
-            buf_card = BytesIO()
-            card.save(buf_card, format="PNG", dpi=(300,300))
-            buf_card.seek(0)
-            buf_preview = BytesIO()
-            card.thumbnail((200,300))
-            card.save(buf_preview, format="PNG")
-            buf_preview.seek(0)
-            prev_b64 = base64.b64encode(buf_preview.read()).decode()
-
-            with qr_cols[i % 4]:
-                st.markdown(f'<img src="data:image/png;base64,{prev_b64}" style="width:100%;border-radius:8px;margin-bottom:8px;border:1px solid #2A2A2A;"/>', unsafe_allow_html=True)
-                buf_card.seek(0)
-                st.download_button(
-                    label=f"Scarica card {sede}",
-                    data=buf_card,
-                    file_name=f"lista_qr_{sede.lower().replace(' ','_')}.png",
-                    mime="image/png",
-                    use_container_width=True,
-                    key=f"qr_dl_{i}"
-                )
-                wa_msg = urllib.parse.quote(f"Lista vini {tenant.get('nome',sede)} - {sede}: {url_lista}")
-                st.markdown(
-                    f'<a href="https://wa.me/?text={wa_msg}" target="_blank" '
-                    f'style="display:block;text-align:center;font-size:0.82em;'
-                    f'color:#25D366;margin-top:6px;margin-bottom:4px;text-decoration:none;'
-                    f'font-weight:600;">📤 Invia via WhatsApp</a>',
-                    unsafe_allow_html=True
-                )
-                st.markdown(
-                    f'<div style="background:#1a1a1a;border:1px solid #333;border-radius:6px;'
-                    f'padding:8px 10px;margin-top:2px;font-size:0.68em;color:#aaa;'
-                    f'word-break:break-all;text-align:center;">'
-                    f'<a href="{url_lista}" target="_blank" style="color:#C9A84C;text-decoration:none;">'
-                    f'🔗 {url_lista}</a></div>',
-                    unsafe_allow_html=True
-                )
+            try:
+                _b3 = genera_pdf_catalogo(giacenza, tenant.get("nome","Cantina"))
+                st.download_button("📚 Catalogo PDF completo", data=_b3,
+                                   file_name=f"catalogo_{nome_f}.pdf",
+                                   mime="application/pdf",
+                                   use_container_width=True, type="primary",
+                                   key="dl_cat")
+            except Exception as e:
+                st.error(f"Errore PDF catalogo: {e}")
 
 
 def grid_vini(tenant, tipo="vini"):
