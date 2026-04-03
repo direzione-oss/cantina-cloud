@@ -747,7 +747,19 @@ def salva_img_cloud(uploaded_file, folder: str) -> str:
         st.error(f"Errore upload immagine: {e}")
         return ""
 
-def pp(t): return str(t).replace("€","E").encode("latin-1","replace").decode("latin-1")
+def pp(t):
+    """Sanitizza testo per FPDF (latin-1): rimuove/sostituisce caratteri non supportati."""
+    return (str(t)
+            .replace("€", "E")
+            .replace("—", "-")   # em dash
+            .replace("–", "-")   # en dash
+            .replace("…", "...")
+            .replace("‘", "'")
+            .replace("’", "'")
+            .replace("“", '"')
+            .replace("”", '"')
+            .encode("latin-1", "replace")
+            .decode("latin-1"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PDF
@@ -902,7 +914,7 @@ def genera_pdf_catalogo(lista, nome_cantina="Cantina"):
         pdf.set_font("Arial", "B", 12)
         ql = sum(to_int(v.get("qta", 0)) for v in vini_cat)
         pdf.cell(PAGE_W, 9,
-                 f"  {pp(cat).upper()}  —  {len(vini_cat)} etichette  /  {ql} bottiglie",
+                 f"  {pp(cat).upper()}  -  {len(vini_cat)} etichette  /  {ql} bottiglie",
                  1, 1, "L", True)
         pdf.ln(2)
 
