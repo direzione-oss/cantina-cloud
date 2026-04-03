@@ -795,8 +795,8 @@ def genera_pdf_lista(lista, titolo):
     pdf.set_font("Arial", "", 8)
     pdf.cell(0, 5, f"Stampato il {datetime.date.today().strftime('%d/%m/%Y')}  -  {len(lista)} etichette", ln=True, align="C")
     pdf.ln(3)
-    hdrs = ["N.", "Nome Vino", "Azienda", "Sede", "Annata", "Formato", "Qta", "Prezzo"]
-    wws  = [10, 70, 50, 35, 18, 30, 13, 28]
+    hdrs = ["ID", "Nome Vino", "Azienda", "Sede", "Annata", "Formato", "Qta", "Prezzo"]
+    wws  = [18, 65, 47, 35, 18, 28, 13, 28]
     W    = sum(wws)
     def stampa_header():
         pdf.set_font("Arial", "B", 8)
@@ -824,8 +824,9 @@ def genera_pdf_lista(lista, titolo):
         stampa_header()
         pdf.set_font("Arial", "", 8)
         for i, v in enumerate(vini_cat):
+            vid = str(v.get('id', ''))[:8]
             row = [
-                str(i + 1),
+                vid,
                 pp(v.get("nome", "")),
                 pp(v.get("azienda", "")),
                 pp(v.get("luogo", "")),
@@ -936,7 +937,7 @@ def genera_pdf_catalogo(lista, nome_cantina="Cantina"):
         pdf.ln(2)
 
         # Header tabella
-        hdrs2 = ["N.", "Nome Vino", "Azienda/Produttore", "Annata", "Gradi", "Sede / Pos.", "Prezzo", "Qta"]
+        hdrs2 = ["ID", "Nome Vino", "Azienda/Produttore", "Annata", "Gradi", "Sede / Pos.", "Prezzo", "Qta"]
         pdf.set_fill_color(240, 235, 235)
         pdf.set_text_color(100, 30, 30)
         pdf.set_font("Arial", "B", 7)
@@ -958,8 +959,9 @@ def genera_pdf_catalogo(lista, nome_cantina="Cantina"):
             sede_txt = f"{sede} / {coll}" if coll else sede
             sede_txt = sede_txt[:22]
 
+            vid = str(v.get('id', ''))[:8]
             row = [
-                str(idx + 1),
+                vid,
                 nome,
                 az,
                 pp(v.get("annata", "")),
