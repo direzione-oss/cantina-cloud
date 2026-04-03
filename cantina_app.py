@@ -277,6 +277,143 @@ init_state()
 
 params = st.query_params
 portale_slug = params.get("portale", "")
+lista_slug   = params.get("lista", "")
+lista_luogo  = params.get("luogo", "")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LISTA OSPITI PER LUOGO (accessibile via QR code senza login)
+# ─────────────────────────────────────────────────────────────────────────────
+
+if lista_slug:
+    import urllib.parse
+    tenant = db.get_tenant_by_slug(lista_slug)
+    if not tenant:
+        st.error("Lista non trovata.")
+        st.stop()
+
+    tid = tenant["id"]
+    tutti_vini = db.get_vini(tid)
+
+    # Filtra per luogo se specificato
+    if lista_luogo:
+        vini_lista = [v for v in tutti_vini
+                      if v.get("luogo","").lower() == lista_luogo.lower()
+                      and to_int(v.get("qta",0)) > 0
+                      and v.get("tipo_cat") != "Provati"]
+        titolo_luogo = lista_luogo
+    else:
+        vini_lista = [v for v in tutti_vini
+                      if to_int(v.get("qta",0)) > 0
+                      and v.get("tipo_cat") != "Provati"]
+        titolo_luogo = "Tutta la Cantina"
+
+    # Raggruppa per categoria
+    categorie = {}
+    for v in vini_lista:
+        cat = v.get("tipo_cat", "Altro")
+        categorie.setdefault(cat, []).append(v)
+
+    ord_cat = [c for c in CATEGORIE_BASE if c in categorie] + \
+              [c for c in categorie if c not in CATEGORIE_BASE]
+
+    # CSS premium mobile-first per lista ospiti
+    st.markdown(f"""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500&display=swap');
+    html, body, .stApp, [data-testid="stAppViewContainer"] {{
+        background: linear-gradient(135deg, #1a0a0a 0%, #0d0d0d 100%) !important;
+        font-family: 'Inter', sans-serif !important;
+    }}
+    [data-testid="stSidebar"] {{ display: none !important; }}
+    [data-testid="stHeader"] {{ display: none !important; }}
+    .block-container {{ padding: 0 !important; max-width: 100% !important; }}
+    .lista-hero {{
+        background: linear-gradient(180deg, #2d0808 0%, #1a0505 60%, #0d0d0d 100%);
+        padding: 48px 24px 36px;
+        text-align: center;
+        border-bottom: 1px solid #3a1a1a;
+    }}
+    .lista-cantina {{ font-family: 'Playfair Display', serif; font-size: 2em; color: #C9A84C; font-weight: 700; }}
+    .lista-sede {{ font-size: 0.95em; color: rgba(255,255,255,0.5); margin-top: 6px; letter-spacing: 2px; text-transform: uppercase; }}
+    .lista-count {{ font-size: 0.82em; color: #888; margin-top: 12px; }}
+    .cat-header {{
+        font-family: 'Playfair Display', serif;
+        font-size: 1.3em; color: #C9A84C;
+        border-bottom: 1px solid #3a1a1a;
+        padding: 24px 20px 10px;
+        margin: 0; letter-spacing: 1px;
+    }}
+    .wine-row {{
+        display: flex; align-items: flex-start;
+        padding: 14px 20px; border-bottom: 1px solid #1e1e1e;
+        transition: background 0.15s;
+    }}
+    .wine-row:hover {{ background: #1a1005; }}
+    .wine-num {{
+        font-size: 0.75em; color: #555;
+        min-width: 28px; padding-top: 3px;
+    }}
+    .wine-info {{ flex: 1; }}
+    .wine-nome {{ font-weight: 600; color: #F0EDE8; font-size: 0.98em; }}
+    .wine-sub {{ color: #888; font-size: 0.78em; margin-top: 2px; }}
+    .wine-fmt {{ color: #666; font-size: 0.72em; margin-top: 2px; }}
+    .wine-qta {{
+        font-size: 0.75em; text-align: right;
+        min-width: 50px; padding-top: 3px;
+    }}
+    .wine-qta .num {{ font-size: 1.3em; font-weight: 700; color: #C9A84C; }}
+    .wine-qta .lbl {{ color: #555; }}
+    .footer-lista {{ text-align:center; padding: 32px 20px; color: #444; font-size:0.75em; }}
+    p, span, div {{ color: #F0EDE8 !important; }}
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Hero
+    logo = tenant.get("logo_url", "")
+    logo_html = f'<img src="{logo}" style="height:64px;border-radius:50%;margin-bottom:12px;display:block;margin-left:auto;margin-right:auto;"/>' if logo else ""
+    st.markdown(f"""
+    <div class="lista-hero">
+        {logo_html}
+        <div style="font-size:2em;margin-bottom:8px;">🍷</div>
+        <div class="lista-cantina">{tenant['nome']}</div>
+        <div class="lista-sede">📍 {titolo_luogo}</div>
+        <div class="lista-count">{len(vini_lista)} vini disponibili</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Lista per categoria
+    for cat in ord_cat:
+        vini_cat = categorie[cat]
+        st.markdown(f'<div class="cat-header">🍾 {cat} <span style="font-size:0.6em;color:#555;font-family:Inter;">({len(vini_cat)})</span></div>', unsafe_allow_html=True)
+        for idx, v in enumerate(sorted(vini_cat, key=lambda x: x.get("nome","")), 1):
+            az   = v.get("azienda","")
+            ann  = v.get("annata","")
+            vit  = v.get("vitigno","")
+            fmt  = v.get("formato","0.75 L")
+            q    = to_int(v.get("qta",0))
+            sub  = " · ".join(filter(None, [az, ann, vit]))
+            st.markdown(f"""
+            <div class="wine-row">
+                <div class="wine-num">{idx}</div>
+                <div class="wine-info">
+                    <div class="wine-nome">{v['nome']}</div>
+                    {f'<div class="wine-sub">{sub}</div>' if sub else ''}
+                    <div class="wine-fmt">🍾 {fmt}</div>
+                </div>
+                <div class="wine-qta">
+                    <div class="num">{q}</div>
+                    <div class="lbl">bott.</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    st.markdown(f"""
+    <div class="footer-lista">
+        Lista aggiornata in tempo reale &nbsp;·&nbsp;
+        <span style="color:#8B1A1A;">CantinaPro</span>
+    </div>
+    """, unsafe_allow_html=True)
+    st.stop()
 
 if portale_slug:
     tenant = db.get_tenant_by_slug(portale_slug)
@@ -913,13 +1050,72 @@ def page_admin_dashboard(tenant):
 
     st.markdown("---")
 
-    # Scarica PDF
-    col1,col2,_ = st.columns([1,1,2])
+    # ── QR CODE PER SEDE ─────────────────────────────────────────────
+    slug = tenant.get("portale_slug", "")
+    if sedi and slug:
+        st.markdown(f"""<div style='font-size:1em;font-weight:600;color:{ACCENT};margin-bottom:12px;'>
+            📱 Lista Ospiti — QR Code per Sede
+            <div style='font-size:0.75em;font-weight:400;color:#888;margin-top:4px;'>
+            Stampa il QR e consegnalo agli ospiti: scannerizzano e vedono la lista vini in tempo reale.
+            </div></div>""", unsafe_allow_html=True)
+
+        qr_cols = st.columns(min(len(sedi), 4))
+        for i, sede in enumerate(sedi):
+            import qrcode, urllib.parse
+            url_lista = f"https://cantina-cloud-gian.streamlit.app?lista={slug}&luogo={urllib.parse.quote(sede)}"
+            qr = qrcode.QRCode(version=1, box_size=6, border=2,
+                               error_correction=qrcode.constants.ERROR_CORRECT_M)
+            qr.add_data(url_lista)
+            qr.make(fit=True)
+            img_qr = qr.make_image(fill_color="#8B1A1A", back_color="#1A1A1A")
+
+            buf = BytesIO()
+            img_qr.save(buf, format="PNG")
+            buf.seek(0)
+            qr_b64 = base64.b64encode(buf.read()).decode()
+
+            vini_sede = [v for v in vini if v.get("luogo")==sede and v.get("tipo_cat")!="Provati" and to_int(v.get("qta",0))>0]
+
+            with qr_cols[i % 4]:
+                st.markdown(f"""
+                <div style="background:#1A1A1A;border:1px solid #2A2A2A;border-radius:12px;
+                            padding:16px;text-align:center;margin-bottom:8px;">
+                    <img src="data:image/png;base64,{qr_b64}"
+                         style="width:140px;height:140px;border-radius:8px;" />
+                    <div style="font-size:0.85em;font-weight:600;color:{ACCENT};margin-top:10px;">{sede}</div>
+                    <div style="font-size:0.72em;color:#666;margin-top:2px;">{len(vini_sede)} vini disponibili</div>
+                </div>
+                """, unsafe_allow_html=True)
+                buf.seek(0)
+                st.download_button(
+                    label=f"💾 QR {sede}",
+                    data=buf,
+                    file_name=f"qr_{sede.lower().replace(' ','_')}.png",
+                    mime="image/png",
+                    use_container_width=True,
+                    key=f"qr_dl_{i}"
+                )
+
+    st.markdown("---")
+
+    # ── PDF ────────────────────────────────────────────────
+    col1, col2, _ = st.columns([1, 1, 2])
     with col1:
-        if st.button("📄 Lista PDF", use_container_width=True, type="secondary"):
+        if st.button("📄 Lista PDF completa", use_container_width=True, type="secondary"):
             giacenza = [v for v in vini if to_int(v.get("qta",0))>0 and v.get("tipo_cat")!="Provati"]
             pdf = genera_pdf_lista(giacenza, f"Giacenza Cantina — {tenant['nome']}")
             st.download_button("📥 Scarica", data=pdf, file_name="cantina.pdf", mime="application/pdf")
+    with col2:
+        if sedi:
+            sede_sel = st.selectbox("📍 Sede per divisa", sedi, key="sede_divisa_sel", label_visibility="collapsed")
+            if st.button(f"📝 Divisa {sede_sel}", use_container_width=True, type="secondary"):
+                vini_sede = [v for v in vini if v.get("luogo")==sede_sel
+                             and v.get("tipo_cat")!="Provati"
+                             and to_int(v.get("qta",0))>0]
+                pdf = genera_pdf_lista(vini_sede, f"Lista Vini — {sede_sel}  ({tenant['nome']})")
+                st.download_button("📥 Scarica Divisa", data=pdf,
+                                   file_name=f"divisa_{sede_sel.lower().replace(' ','_')}.pdf",
+                                   mime="application/pdf")
 
 def grid_vini(tenant, tipo="vini"):
     tid = tenant["id"]
