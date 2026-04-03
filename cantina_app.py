@@ -768,12 +768,14 @@ def pp(t):
 @st.cache_data(ttl=300, show_spinner=False)
 def _cached_pdf_lista(vini_tuple, titolo):
     """Genera lista PDF (cached 5 min)."""
-    return genera_pdf_lista(list(vini_tuple), titolo)
+    vini = [dict(fs) for fs in vini_tuple]   # frozenset -> dict
+    return genera_pdf_lista(vini, titolo)
 
 @st.cache_data(ttl=300, show_spinner=False)
 def _cached_pdf_catalogo(vini_tuple, nome_cantina):
     """Genera catalogo PDF (cached 5 min)."""
-    return genera_pdf_catalogo(list(vini_tuple), nome_cantina)
+    vini = [dict(fs) for fs in vini_tuple]   # frozenset -> dict
+    return genera_pdf_catalogo(vini, nome_cantina)
 
 def genera_pdf_lista(lista, titolo):
     from collections import OrderedDict
