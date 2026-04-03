@@ -982,6 +982,100 @@ def genera_pdf_catalogo(lista, nome_cantina="Cantina"):
     return bytes(pdf.output())
 
 
+def genera_pdf_etichette(lista, titolo="Etichette"):
+    """Genera PDF con etichette stampabili 3 colonne × 8 righe su A4.
+    Ogni etichetta: ID breve, nome, azienda, annata, prezzo, sede."""
+    pdf = FPDF(orientation="P", unit="mm", format="A4")
+    pdf.set_margins(8, 8, 8)
+    pdf.set_auto_page_break(False)
+
+    # Layout: 3 colonne × 8 righe, margine 8mm
+    E_W = 62    # larghezza etichetta
+    E_H = 33    # altezza etichetta
+    GAP_X = 3
+    GAP_Y = 2
+    COLS = 3
+    ROWS = 8
+
+    page_started = False
+    for idx, v in enumerate(lista):
+        col = idx % COLS
+        row = (idx // COLS) % ROWS
+        if col == 0 and row == 0:
+            pdf.add_page()
+            page_started = True
+            # Header pagina
+            pdf.set_font("Arial", "I", 7)
+            pdf.set_text_color(160, 160, 160)
+            pdf.cell(0, 4, f"{pp(titolo)}  -  pag. {pdf.page_no()}", ln=True, align="C")
+            pdf.ln(1)
+
+        x = 8 + col * (E_W + GAP_X)
+        y = 14 + row * (E_H + GAP_Y)
+
+        # Bordo etichetta
+        pdf.set_draw_color(180, 180, 180)
+        pdf.rect(x, y, E_W, E_H)
+
+        # Banda superiore bordeaux
+        pdf.set_fill_color(139, 26, 26)
+        pdf.rect(x, y, E_W, 7, "F")
+
+        # ID + nome nella banda
+        vid = str(v.get("id", ""))[:8]
+        pdf.set_xy(x + 1, y + 1)
+        pdf.set_font("Arial", "B", 7)
+        pdf.set_text_color(255, 255, 255)
+        nome_trunc = pp(v.get("nome", ""))[:28]
+        pdf.cell(E_W - 2, 5, f"#{vid}  {nome_trunc}", 0, 0, "L")
+
+        # Corpo etichetta
+        corpo_y = y + 8
+        pdf.set_text_color(40, 40, 40)
+
+        # Azienda
+        pdf.set_xy(x + 2, corpo_y)
+        pdf.set_font("Arial", "", 7)
+        pdf.cell(E_W - 4, 4, pp(v.get("azienda", ""))[:30], 0, 0, "L")
+
+        # Annata + Gradi
+        pdf.set_xy(x + 2, corpo_y + 4.5)
+        pdf.set_font("Arial", "", 6.5)
+        annata = v.get("annata", "")
+        gradi = v.get("gradi", "")
+        det = f"Annata: {annata}" if annata else ""
+        if gradi: det += f"  |  {gradi}%" if det else f"Gradi: {gradi}%"
+        pdf.cell(E_W - 4, 4, pp(det), 0, 0, "L")
+
+        # Formato + Sede
+        pdf.set_xy(x + 2, corpo_y + 9)
+        pdf.set_font("Arial", "", 6.5)
+        sede = v.get("luogo", "")
+        coll = v.get("collocazione", "")
+        fmt = v.get("formato", "")
+        loc_txt = f"{sede}" + (f" / {coll}" if coll else "")
+        info = f"{fmt}" if fmt else ""
+        if loc_txt: info += f"  |  {loc_txt}" if info else loc_txt
+        pdf.cell(E_W - 4, 4, pp(info)[:35], 0, 0, "L")
+
+        # Prezzo (in basso a destra)
+        pdf.set_xy(x + 2, corpo_y + 14)
+        pdf.set_font("Arial", "B", 9)
+        pdf.set_text_color(139, 26, 26)
+        prezzo = to_float(v.get("prezzo", 0))
+        pdf.cell(E_W - 4, 5, f"E {prezzo:.2f}", 0, 0, "R")
+
+        # Qta (in basso a sinistra)
+        pdf.set_xy(x + 2, corpo_y + 14)
+        pdf.set_font("Arial", "", 7)
+        pdf.set_text_color(80, 80, 80)
+        pdf.cell(20, 5, f"Qta: {to_int(v.get('qta', 0))}", 0, 0, "L")
+
+        pdf.set_text_color(0, 0, 0)
+
+    return bytes(pdf.output())
+
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1204,7 +1298,9 @@ def dialog_scheda(v):
         colloc = f' · {v.get("collocazione")}' if v.get("collocazione") else ""
         prov = v.get("provenienza", "")
 
+        vid_short = str(v.get('id',''))[:8]
         html = (
+            f'<div style="font-size:0.72em;color:#888;font-family:monospace;margin-bottom:6px;">ID: {vid_short}</div>'
             f'<h3 style="color:#C9A84C;margin-bottom:16px;font-size:1.3em;border-bottom:1px solid #2A2A2A;padding-bottom:10px;">{v["nome"]}</h3>'
             + r("🏭", "Cantina", v.get("azienda", ""))
             + r("📅", "Annata", v.get("annata", ""))
@@ -1415,6 +1511,43 @@ def page_admin_dashboard(tenant):
                 pass
     st.markdown("---")
 
+    # ── STAMPA ETICHETTE CON INTERVALLO ───────────────────────────────
+    if giacenza:
+        st.markdown(f"""<div style='font-size:1em;font-weight:600;color:{ACCENT};margin-bottom:8px;'>
+            🏷️ Stampa Etichette
+            <div style='font-size:0.75em;font-weight:400;color:#888;margin-top:4px;'>
+            Seleziona l'intervallo di vini da stampare (per non ristampare etichette gi&agrave; fatte).
+            </div></div>""", unsafe_allow_html=True)
+
+        # Numera i vini in giacenza per dare un indice leggibile
+        et1, et2, et3 = st.columns([1, 1, 1])
+        with et1:
+            id_da = st.number_input("Da posizione", min_value=1, max_value=len(giacenza),
+                                     value=1, step=1, key="et_da")
+        with et2:
+            id_a = st.number_input("A posizione", min_value=1, max_value=len(giacenza),
+                                    value=len(giacenza), step=1, key="et_a")
+        with et3:
+            st.markdown(f"<div style='padding-top:28px;font-size:0.85em;color:{TEXT_MUTED};'>"
+                        f"Totale: <b style='color:{ACCENT};'>{max(0, id_a - id_da + 1)}</b> etichette"
+                        f"</div>", unsafe_allow_html=True)
+
+        if id_da <= id_a:
+            selezione = giacenza[id_da - 1 : id_a]
+            if selezione:
+                try:
+                    _b_et = genera_pdf_etichette(selezione,
+                                f"Etichette {tenant.get('nome','Cantina')} ({id_da}-{id_a})")
+                    st.download_button(f"Stampa {len(selezione)} etichette (pos. {id_da}–{id_a})",
+                                       data=_b_et,
+                                       file_name=f"etichette_{id_da}_{id_a}.pdf",
+                                       mime="application/pdf",
+                                       use_container_width=True, key="dl_etichette")
+                except Exception as e:
+                    st.error(f"Errore PDF etichette: {e}")
+
+    st.markdown("---")
+
     # ── QR CODE PER SEDE ─────────────────────────────────────────────
     slug = tenant.get("portale_slug", "")
     if sedi and slug:
@@ -1568,8 +1701,10 @@ def grid_vini(tenant, tipo="vini"):
 
             if v.get("foto_url"): st.image(v["foto_url"], use_container_width=True)
 
+            vid_short = str(v.get('id',''))[:8]
             st.markdown(f"""
             <div style="padding:10px 12px;">
+                <div style="font-size:0.7em;color:#888;font-family:monospace;margin-bottom:4px;">ID: {vid_short}</div>
                 <div style="font-size:1.2em;font-weight:700;color:{ACCENT};">€ {to_float(v.get('prezzo',0)):,.2f}</div>
                 <div style="color:{TEXT_MUTED};font-size:0.8em;">{v.get('azienda','')} · {v.get('annata','')}</div>
                 <div style="margin-top:6px;font-size:0.82em;">
