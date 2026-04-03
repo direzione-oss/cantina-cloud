@@ -106,10 +106,22 @@ def insert_vino(tenant_id: str, data: dict) -> dict:
     resp = sb.table("vini").insert(data).execute()
     return resp.data[0] if resp.data else {}
 
+# Colonne sicure della tabella mignon (esclude campi solo-vini)
+MIGNON_COLS = {
+    "tenant_id", "nome", "azienda", "annata", "vitigno", "gradi",
+    "prezzo", "qta", "formato", "provenienza", "luogo",
+    "note", "foto_url", "tipo_cat",
+}
+
+def _mignon_payload(data: dict) -> dict:
+    """Filtra il payload tenendo solo le colonne della tabella mignon."""
+    return {k: v for k, v in data.items() if k in MIGNON_COLS}
+
 def insert_mignon(tenant_id: str, data: dict) -> dict:
     sb = get_sb()
-    data["tenant_id"] = tenant_id
-    resp = sb.table("mignon").insert(data).execute()
+    payload = _mignon_payload(data)
+    payload["tenant_id"] = tenant_id
+    resp = sb.table("mignon").insert(payload).execute()
     return resp.data[0] if resp.data else {}
 
 def update_vino(record_id: int, data: dict) -> dict:
@@ -119,7 +131,9 @@ def update_vino(record_id: int, data: dict) -> dict:
 
 def update_mignon(record_id: int, data: dict) -> dict:
     sb = get_sb()
-    resp = sb.table("mignon").update(data).eq("id", record_id).execute()
+    payload = _mignon_payload(data)
+    payload.pop("tenant_id", None)  # non aggiornare il tenant_id
+    resp = sb.table("mignon").update(payload).eq("id", record_id).execute()
     return resp.data[0] if resp.data else {}
 
 def delete_vino(record_id: int):
