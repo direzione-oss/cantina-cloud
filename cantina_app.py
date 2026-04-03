@@ -441,6 +441,18 @@ if lista_slug:
         font-size: 0.75em; color: #555;
         min-width: 28px; padding-top: 3px;
     }}
+    .wine-thumb {{
+        width: 40px; height: 54px; object-fit: cover;
+        border-radius: 4px; margin-right: 12px;
+        border: 1px solid #2a2a2a; flex-shrink: 0;
+    }}
+    .wine-thumb-empty {{
+        width: 40px; height: 54px; border-radius: 4px;
+        margin-right: 12px; flex-shrink: 0;
+        background: #1a1a1a; border: 1px solid #2a2a2a;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.2em; color: #333;
+    }}
     .wine-info {{ flex: 1; }}
     .wine-nome {{ font-weight: 600; color: #F0EDE8; font-size: 0.98em; }}
     .wine-sub {{ color: #888; font-size: 0.78em; margin-top: 2px; }}
@@ -479,9 +491,12 @@ if lista_slug:
             fmt  = v.get("formato","0.75 L")
             q    = to_int(v.get("qta",0))
             sub  = " · ".join(filter(None, [az, ann, vit]))
+            foto = v.get("foto_url", "")
+            thumb_html = f'<img class="wine-thumb" src="{foto}" alt=""/>' if foto else '<div class="wine-thumb-empty">🍷</div>'
             st.markdown(f"""
             <div class="wine-row">
                 <div class="wine-num">{idx}</div>
+                {thumb_html}
                 <div class="wine-info">
                     <div class="wine-nome">{v['nome']}</div>
                     {f'<div class="wine-sub">{sub}</div>' if sub else ''}
