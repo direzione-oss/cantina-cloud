@@ -6,6 +6,7 @@ Ruoli: superadmin | admin (cliente) | portale pubblico
 """
 import streamlit as st
 import os, random, base64, datetime, hashlib, re, smtplib, uuid
+import html as _html  # html.escape() per prevenire XSS in unsafe_allow_html
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from io import BytesIO
@@ -687,8 +688,9 @@ Se non hai richiesto il reset, ignora questa email.</p>
             server.starttls()
             server.login(smtp_user, smtp_pass)
             server.sendmail(smtp_user, email_dest, msg.as_string())
-    except Exception:
-        pass
+    except Exception as _smtp_err:
+        import sys
+        print(f"[SMTP RESET ERR] {_smtp_err}", file=sys.stderr)
 
 def _banner_trial(user: dict):
     """Mostra banner se l'account è in periodo di trial."""
@@ -1473,12 +1475,12 @@ def dialog_stappa(v, tenant_id, tipo):
     if st.button("✅ Confermo lo stappo", type="primary"):
         if tipo == "vini":
             if int(v.get("qta",1)) > 1:
-                db.update_vino(v["id"], {"qta": int(v["qta"])-1})
+                db.update_vino(v["id"], tenant_id, {"qta": int(v["qta"])-1})
                 copia = {k:val for k,val in v.items() if k not in ("id","created_at")}
                 copia.update({"qta":0,"tipo_cat":"Provati","giudizio":giudizio,"cat_origine":v.get("tipo_cat","Rossi"),"tenant_id":tenant_id})
                 db.insert_vino(tenant_id, copia)
             else:
-                db.update_vino(v["id"], {"qta":0,"tipo_cat":"Provati","giudizio":giudizio,"cat_origine":v.get("tipo_cat","Rossi")})
+                db.update_vino(v["id"], tenant_id, {"qta":0,"tipo_cat":"Provati","giudizio":giudizio,"cat_origine":v.get("tipo_cat","Rossi")})
         db.get_vini.clear()
         st.rerun()
 
@@ -1503,9 +1505,9 @@ def dialog_delete(v, tipo):
             except Exception:
                 pass
         if tipo == "vini":
-            db.get_sb().table("vini").delete().eq("id", v["id"]).execute()
+            db.delete_vino(v["id"], v.get("tenant_id", ""))
         else:
-            db.get_sb().table("mignon").delete().eq("id", v["id"]).execute()
+            db.delete_mignon(v["id"], v.get("tenant_id", ""))
         db.get_vini.clear()
         db.get_mignon.clear()
         st.success(f"✅ '{v.get('nome','')}' eliminato.")
@@ -1589,7 +1591,7 @@ def form_vino(tenant_id, tipo="vini", vino_esistente=None):
             if tipo == "vini":
                 payload.update({"tipo_vino":tipo_vino, "zucchero":zucchero})
             if is_edit:
-                db.update_vino(v["id"], payload) if tipo=="vini" else db.update_mignon(v["id"], payload)
+                db.update_vino(v["id"], tenant_id, payload) if tipo=="vini" else db.update_mignon(v["id"], tenant_id, payload)
             else:
                 db.insert_vino(tenant_id, payload) if tipo=="vini" else db.insert_mignon(tenant_id, payload)
             db.get_vini.clear()
@@ -1915,28 +1917,44 @@ def grid_vini(tenant, tipo="vini"):
             loc = v.get("luogo","")
             coll= v.get("collocazione","")
 
+            # XSS guard: escape tutti i dati utente prima di inserirli in HTML
+            _nome = _html.escape(str(v.get('nome', '')))
+            _cat  = _html.escape(str(cat))
+            _az   = _html.escape(str(v.get('azienda', '')))
+            _ann  = _html.escape(str(v.get('annata', '')))
+            _loc  = _html.escape(str(loc))
+            _cll  = _html.escape(str(coll))
+            _fmt  = _html.escape(str(v.get('formato', '0.75 L')))
+            _giud = _html.escape(str(v.get('giudizio', '')[:50]))
+
             st.markdown(f"""
             <div class="wine-card">
                 <div class="wine-card-header">
-                    {v['nome']}
-                    <span class="wine-badge">{cat}</span>
+                    {_nome}
+                    <span class="wine-badge">{_cat}</span>
                 </div>
             """, unsafe_allow_html=True)
 
             if v.get("foto_url"): st.image(v["foto_url"], use_container_width=True)
 
             vid_short = str(v.get('id',''))[:8]
+            _prezzo = to_float(v.get('prezzo', 0))
+            _qta_color = '#C9A84C' if q > 3 else ('#f59e0b' if q > 0 else '#ef4444')
+            _loc_html = (f'<div style="font-size:0.78em;color:{TEXT_MUTED};">&#128205; {_loc}'
+                         + (f' &middot; {_cll}' if _cll else '') + '</div>') if _loc else ''
+            _giud_html = (f'<div style="font-size:0.78em;color:#d97706;margin-top:4px;font-style:italic;">🍷 {_giud}…</div>'
+                          if v.get("giudizio") else '')
             st.markdown(f"""
             <div style="padding:10px 12px;">
                 <div style="font-size:0.7em;color:#888;font-family:monospace;margin-bottom:4px;">ID: {vid_short}</div>
-                <div style="font-size:1.2em;font-weight:700;color:{ACCENT};">€ {to_float(v.get('prezzo',0)):,.2f}</div>
-                <div style="color:{TEXT_MUTED};font-size:0.8em;">{v.get('azienda','')} · {v.get('annata','')}</div>
+                <div style="font-size:1.2em;font-weight:700;color:{ACCENT};">&#8364; {_prezzo:,.2f}</div>
+                <div style="color:{TEXT_MUTED};font-size:0.8em;">{_az} &middot; {_ann}</div>
                 <div style="margin-top:6px;font-size:0.82em;">
-                    🍾 {v.get('formato','0.75 L')} &nbsp;|&nbsp;
-                    📦 Qta: <b style="color:{ACCENT if q>3 else '#f59e0b' if q>0 else '#ef4444'};">{q}</b>
+                    🍾 {_fmt} &nbsp;|&nbsp;
+                    📦 Qta: <b style="color:{_qta_color};">{q}</b>
                 </div>
-                {'<div style="font-size:0.78em;color:'+TEXT_MUTED+';">📍 '+loc+(' · '+coll if coll else '')+'</div>' if loc else ''}
-                {'<div style="font-size:0.78em;color:#d97706;margin-top:4px;font-style:italic;">🍷 '+v["giudizio"][:50]+'…</div>' if v.get("giudizio") else ''}
+                {_loc_html}
+                {_giud_html}
             </div>
             """, unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
@@ -1944,12 +1962,16 @@ def grid_vini(tenant, tipo="vini"):
             # Azioni
             a1,a2,a3,a4,a5,a6 = st.columns(6)
             if a1.button("−", key=f"m_{tipo}_{v['id']}", help="Decrementa"):
-                upd = db.update_vino if tipo=="vini" else db.update_mignon
-                upd(v["id"], {"qta": max(0, q-1)})
+                if tipo == "vini":
+                    db.update_vino(v["id"], tid, {"qta": max(0, q-1)})
+                else:
+                    db.update_mignon(v["id"], tid, {"qta": max(0, q-1)})
                 db.get_vini.clear(); db.get_mignon.clear(); st.rerun()
             if a2.button("+", key=f"p_{tipo}_{v['id']}", help="Incrementa"):
-                upd = db.update_vino if tipo=="vini" else db.update_mignon
-                upd(v["id"], {"qta": q+1})
+                if tipo == "vini":
+                    db.update_vino(v["id"], tid, {"qta": q+1})
+                else:
+                    db.update_mignon(v["id"], tid, {"qta": q+1})
                 db.get_vini.clear(); db.get_mignon.clear(); st.rerun()
             if a3.button("✏️", key=f"e_{tipo}_{v['id']}", help="Modifica"):
                 st.session_state.id_modifica = v["id"]; st.rerun()
@@ -2051,13 +2073,22 @@ def page_admin_settings(tenant):
         np = st.text_input("Nuova password", type="password", placeholder="lascia vuoto per non cambiare")
 
         if st.form_submit_button("💾 Salva impostazioni", type="primary"):
-            data = {"nome":nn, "telefono":nt, "logo_url":nl}
-            if np: data["password"] = np
-            db.update_tenant(tid, data)
-            st.session_state.user = db.get_tenant(tid)
-            if st.session_state.tenant_view: st.session_state.tenant_view = db.get_tenant(tid)
-            st.success("✅ Impostazioni salvate!")
-            st.rerun()
+            # A-3: validazione URL logo
+            def _url_sicuro(u):
+                if not u: return True
+                import urllib.parse
+                p = urllib.parse.urlparse(u)
+                return p.scheme in ("https", "http") and bool(p.netloc)
+            if nl and not _url_sicuro(nl):
+                st.error("❌ URL logo non valido. Usa un indirizzo https:// valido.")
+            else:
+                data = {"nome":nn, "telefono":nt, "logo_url":nl}
+                if np: data["password"] = np
+                db.update_tenant(tid, data)
+                st.session_state.user = db.get_tenant(tid)
+                if st.session_state.tenant_view: st.session_state.tenant_view = db.get_tenant(tid)
+                st.success("✅ Impostazioni salvate!")
+                st.rerun()
 
     st.markdown("---")
 
@@ -2110,11 +2141,11 @@ def page_admin_settings(tenant):
                         count = 0
                         for v in vini:
                             if v.get("luogo") == old_name:
-                                db.update_vino(v["id"], {"luogo": new_name})
+                                db.update_vino(v["id"], tid, {"luogo": new_name})
                                 count += 1
                         for v in mignon:
                             if v.get("luogo") == old_name:
-                                db.update_mignon(v["id"], {"luogo": new_name})
+                                db.update_mignon(v["id"], tid, {"luogo": new_name})
                                 count += 1
                         st.session_state.sede_rinomina = None
                         st.success(f"✅ Sede rinominata: '{old_name}' → '{new_name}' ({count} bottiglie aggiornate)")

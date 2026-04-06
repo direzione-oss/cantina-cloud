@@ -185,25 +185,35 @@ def insert_mignon(tenant_id: str, data: dict) -> dict:
     resp = sb.table("mignon").insert(payload).execute()
     return resp.data[0] if resp.data else {}
 
-def update_vino(record_id: int, data: dict) -> dict:
+def update_vino(record_id: int, tenant_id: str, data: dict) -> dict:
+    """Aggiorna un vino verificando l'appartenenza al tenant (previene IDOR)."""
     sb = get_sb()
-    resp = sb.table("vini").update(data).eq("id", record_id).execute()
+    resp = (sb.table("vini").update(data)
+            .eq("id", record_id)
+            .eq("tenant_id", tenant_id)  # isolamento tenant garantito DB-side
+            .execute())
     return resp.data[0] if resp.data else {}
 
-def update_mignon(record_id: int, data: dict) -> dict:
+def update_mignon(record_id: int, tenant_id: str, data: dict) -> dict:
+    """Aggiorna un mignon verificando l'appartenenza al tenant (previene IDOR)."""
     sb = get_sb()
     payload = _mignon_payload(data)
-    payload.pop("tenant_id", None)  # non aggiornare il tenant_id
-    resp = sb.table("mignon").update(payload).eq("id", record_id).execute()
+    payload.pop("tenant_id", None)
+    resp = (sb.table("mignon").update(payload)
+            .eq("id", record_id)
+            .eq("tenant_id", tenant_id)  # isolamento tenant garantito DB-side
+            .execute())
     return resp.data[0] if resp.data else {}
 
-def delete_vino(record_id: int):
+def delete_vino(record_id: int, tenant_id: str):
+    """Elimina un vino verificando l'appartenenza al tenant (previene IDOR)."""
     sb = get_sb()
-    sb.table("vini").delete().eq("id", record_id).execute()
+    sb.table("vini").delete().eq("id", record_id).eq("tenant_id", tenant_id).execute()
 
-def delete_mignon(record_id: int):
+def delete_mignon(record_id: int, tenant_id: str):
+    """Elimina un mignon verificando l'appartenenza al tenant (previene IDOR)."""
     sb = get_sb()
-    sb.table("mignon").delete().eq("id", record_id).execute()
+    sb.table("mignon").delete().eq("id", record_id).eq("tenant_id", tenant_id).execute()
 
 # ── Storage ───────────────────────────────────────────────────────────────────
 
@@ -236,22 +246,5 @@ def get_stats_globali() -> dict:
         "n_vini_records": vini.count or 0,
     }
 
-# ── Compat. vecchia API (usata in cantina_cloud.py originale) ─────────────────
-
-def get_all(table: str) -> list[dict]:
-    sb = get_sb()
-    return sb.table(table).select("*").order("id").execute().data or []
-
-def insert_record(table: str, data: dict) -> dict:
-    sb = get_sb()
-    resp = sb.table(table).insert(data).execute()
-    return resp.data[0] if resp.data else {}
-
-def update_record(table: str, record_id: int, data: dict) -> dict:
-    sb = get_sb()
-    resp = sb.table(table).update(data).eq("id", record_id).execute()
-    return resp.data[0] if resp.data else {}
-
-def delete_record(table: str, record_id: int):
-    sb = get_sb()
-    sb.table(table).delete().eq("id", record_id).execute()
+# Legacy API rimossa: usava accesso diretto senza verifica tenant.
+# Usare le funzioni specifiche (get_vini, update_vino, delete_vino, ecc.)
