@@ -736,32 +736,20 @@ def show_login():
                 pwd_l   = st.text_input("Password", type="password", placeholder="••••••••", key="login_pwd")
                 sub_l   = st.form_submit_button("🔓 ACCEDI", use_container_width=True, type="primary")
             if sub_l:
-                _now = datetime.datetime.now()
-                _blocked = st.session_state.login_blocked_until
-                if _blocked and _now < _blocked:
-                    _sec = int((_blocked - _now).total_seconds())
-                    st.error(f"🔒 Troppi tentativi falliti. Riprova tra {_sec} secondi.")
-                elif not email_l or not pwd_l:
+                if not email_l or not pwd_l:
                     st.error("Inserisci email e password.")
                 else:
                     user = db.verify_login(email_l.strip().lower(), pwd_l)
-                    if user:
-                        st.session_state.login_attempts = 0
-                        st.session_state.login_blocked_until = None
+                    if user == "__blocked__":
+                        st.error("🔒 Troppi tentativi falliti. Accesso bloccato per 5 minuti. Usa 'Hai dimenticato la password?' per sbloccarti.")
+                    elif user:
                         st.session_state.logged_in = True
                         st.session_state.user      = user
                         st.session_state.ruolo     = user.get("ruolo", "admin")
                         st.session_state.page      = "dashboard"
                         st.rerun()
                     else:
-                        st.session_state.login_attempts += 1
-                        _att = st.session_state.login_attempts
-                        if _att >= 5:
-                            st.session_state.login_blocked_until = datetime.datetime.now() + datetime.timedelta(minutes=5)
-                            st.session_state.login_attempts = 0
-                            st.error("🔒 Troppi tentativi falliti. Accesso bloccato per 5 minuti.")
-                        else:
-                            st.error(f"❌ Credenziali non valide. ({_att}/5 tentativi)")
+                        st.error("❌ Credenziali non valide.")
             st.markdown("</div>", unsafe_allow_html=True)
 
             # ── DIMENTICATO LA PASSWORD ────────────────────────────────────

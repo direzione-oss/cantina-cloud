@@ -4,16 +4,14 @@ Client Supabase con supporto multi-tenant, autenticazione custom e CRUD.
 """
 import streamlit as st
 from supabase import create_client, Client
-import hashlib, secrets, time, uuid, datetime
+import hashlib, secrets, time, uuid, datetime, bcrypt
 
 BUCKET = "cantina-images"
 
-# ── Chiavi Supabase (la anon key è una chiave pubblica by design) ─────────────
+# ── Endpoint pubblico (non segreto) ──────────────────────────────────────────
 _SB_URL = "https://ltssduxqpmvuzvpitmpx.supabase.co"
-_SB_ANON = ("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
-             ".eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx0c3NkdXhxcG12dXp2cGl0bXB4"
-             "Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1Nzg2MDIsImV4cCI6MjA4ODE1"
-             "NDYwMn0.ufMro1pGIoPiQ4SIKsDVTfqaV9FnadWcSjA1JBgCvhY")
+# CVE-1: la chiave API NON è più hardcoded nel codice sorgente.
+# Configurare SUPABASE_KEY nei secrets di Streamlit Cloud.
 
 # ── Init ──────────────────────────────────────────────────────────────────────
 
@@ -25,34 +23,89 @@ def _valid_jwt(key: str) -> bool:
 def init_supabase() -> Client:
     try:
         url = st.secrets.get("SUPABASE_URL", _SB_URL) or _SB_URL
-        key = st.secrets.get("SUPABASE_KEY", _SB_ANON)
+        key = st.secrets.get("SUPABASE_KEY", "")
     except Exception:
-        url, key = _SB_URL, _SB_ANON
-    # Se il secret è corrotto o mancante, usa la anon key pubblica
+        st.error("⚠️ Impossibile leggere i secrets Supabase. Configura SUPABASE_URL e SUPABASE_KEY in Streamlit Cloud.")
+        st.stop()
     if not _valid_jwt(key):
-        key = _SB_ANON
+        st.error("⚠️ SUPABASE_KEY non valida o mancante nei secrets. Aggiorna la configurazione su Streamlit Cloud.")
+        st.stop()
     return create_client(url, key)
 
 def get_sb() -> Client:
     """Ritorna il client Supabase, ricreandolo se la connessione è stale."""
     try:
         return init_supabase()
+    except SystemExit:
+        raise  # st.stop() solleva SystemExit, non intercettare
     except Exception:
-        # Svuota la cache e riprova una volta
         init_supabase.clear()
         return init_supabase()
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
 def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+    """Hasha la password con bcrypt (salt automatico, work factor 12)."""
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
-def verify_login(email: str, password: str) -> dict | None:
-    """Verifica credenziali e ritorna il tenant (utente) o None."""
+def _verify_password(password: str, stored_hash: str) -> bool:
+    """Verifica la password. Supporta bcrypt e SHA256 legacy per migrazione graduale."""
+    if not stored_hash:
+        return False
+    try:
+        if stored_hash.startswith(("$2b$", "$2a$", "$2y$")):
+            return bcrypt.checkpw(password.encode(), stored_hash.encode())
+        # Fallback SHA256 (hash legacy pre-bcrypt)
+        return hashlib.sha256(password.encode()).hexdigest() == stored_hash
+    except Exception:
+        return False
+
+def verify_login(email: str, password: str):
+    """Verifica credenziali con brute force tracking su DB.
+    Ritorna: dict (utente OK) | '__blocked__' (troppi tentativi) | None (credenziali errate).
+    """
     sb = get_sb()
-    pw_hash = hash_password(password)
-    resp = sb.table("tenants").select("*").eq("email", email).eq("password_hash", pw_hash).eq("attivo", True).execute()
-    return resp.data[0] if resp.data else None
+    try:
+        resp = sb.table("tenants").select("*").eq("email", email).eq("attivo", True).execute()
+    except Exception:
+        return None
+    if not resp.data:
+        return None
+    tenant = resp.data[0]
+    tid = tenant["id"]
+    now_utc = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+    # Controlla brute force su DB
+    blocked_until = tenant.get("login_blocked_until")
+    if blocked_until and blocked_until > now_utc:
+        return "__blocked__"
+
+    # Verifica password
+    if not _verify_password(password, tenant.get("password_hash", "")):
+        attempts = (tenant.get("login_attempts") or 0) + 1
+        upd = {"login_attempts": attempts}
+        if attempts >= 5:
+            bl = (datetime.datetime.now(datetime.timezone.utc)
+                  + datetime.timedelta(minutes=5)).isoformat()
+            upd["login_blocked_until"] = bl
+            upd["login_attempts"] = 0
+        try:
+            sb.table("tenants").update(upd).eq("id", tid).execute()
+        except Exception:
+            pass
+        return None
+
+    # Login OK: reset contatori
+    reset_upd: dict = {"login_attempts": 0, "login_blocked_until": None}
+    # Migrazione graduale SHA256 → bcrypt: rihasha al prossimo login
+    stored = tenant.get("password_hash", "")
+    if not stored.startswith(("$2b$", "$2a$", "$2y$")):
+        reset_upd["password_hash"] = hash_password(password)
+    try:
+        sb.table("tenants").update(reset_upd).eq("id", tid).execute()
+    except Exception:
+        pass
+    return tenant
 
 def generate_reset_token(email: str) -> str | None:
     """Genera un token di reset password valido 30 minuti. Ritorna il token o None se email non trovata."""
