@@ -319,8 +319,17 @@ SCALA_ZUCCHERI = ["N.S.","Pas Dosé","Extra Brut","Brut","Extra Dry","Dry","Demi
 
 PIANI = {"base": "🥈 Base", "pro": "🥇 Pro", "enterprise": "💎 Enterprise"}
 
-SUPERADMIN_EMAIL = st.secrets.get("SUPERADMIN_EMAIL", "admin@cantina.pro")
-APP_BASE_URL     = st.secrets.get("APP_BASE_URL", "https://cantina-cloud-gian.streamlit.app")
+def _get_secret(key: str, default: str = "") -> str:
+    val = os.environ.get(key)
+    if val:
+        return val
+    try:
+        return st.secrets.get(key, default) or default
+    except Exception:
+        return default
+
+SUPERADMIN_EMAIL = _get_secret("SUPERADMIN_EMAIL", "direzione@serrastudio.it")
+APP_BASE_URL     = _get_secret("APP_BASE_URL", "https://cantina.187.126.30.207.sslip.io")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SESSION STATE
@@ -1150,16 +1159,18 @@ def genera_pdf_etichette(lista, titolo="Etichette", num_offset=0):
         img_h = 38
         if foto_url:
             try:
-                req = urllib.request.Request(foto_url, headers={"User-Agent": "Mozilla/5.0"})
-                with urllib.request.urlopen(req, timeout=5) as resp:
-                    img_data = resp.read()
-                tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
-                tmp.write(img_data)
-                tmp.close()
-                # Centra l'immagine orizzontalmente
-                pdf.image(tmp.name, x=x + E_W/2 - 12, y=img_y, h=img_h)
-                import os
-                os.unlink(tmp.name)
+                if os.path.exists(foto_url):
+                    pdf.image(foto_url, x=x + E_W/2 - 12, y=img_y, h=img_h)
+                else:
+                    req = urllib.request.Request(foto_url, headers={"User-Agent": "Mozilla/5.0"})
+                    with urllib.request.urlopen(req, timeout=5) as resp:
+                        img_data = resp.read()
+                    tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+                    tmp.write(img_data)
+                    tmp.close()
+                    # Centra l'immagine orizzontalmente
+                    pdf.image(tmp.name, x=x + E_W/2 - 12, y=img_y, h=img_h)
+                    os.unlink(tmp.name)
             except Exception:
                 # Se fallisce, metti placeholder
                 pdf.set_xy(x + 2, img_y + 10)
@@ -1485,11 +1496,11 @@ def dialog_delete(v, tipo):
         foto_url = v.get("foto_url", "")
         if foto_url:
             try:
-                # Estrae il path relativo dall'URL pubblico
-                bucket_marker = "/cantina-images/"
-                if bucket_marker in foto_url:
-                    path = foto_url.split(bucket_marker)[1].split("?")[0]
-                    db.get_sb().storage.from_("cantina-images").remove([path])
+                for marker in ("/cantina-images/", "/app/static/"):
+                    if marker in foto_url:
+                        path = foto_url.split(marker)[1].split("?")[0]
+                        db.get_sb().storage.from_("cantina-images").remove([path])
+                        break
             except Exception:
                 pass
         if tipo == "vini":

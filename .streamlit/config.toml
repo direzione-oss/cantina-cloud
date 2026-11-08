@@ -1,2 +1,6 @@
 [runner]
 magicEnabled = false
+
+[server]
+enableStaticServing = true
+headless = true

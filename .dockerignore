@@ -1,0 +1,9 @@
+.git
+__pycache__
+*.pyc
+.streamlit/secrets.toml
+img_cantina
+img_mignon
+cantina.py
+cantina3.py
+cantina_cloud.py

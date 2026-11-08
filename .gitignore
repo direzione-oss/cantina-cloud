@@ -1,6 +1,6 @@
-# Streamlit Cloud deployment
-# Non caricare su GitHub:
+# Non caricare dati sensibili su GitHub:
 .streamlit/secrets.toml
+storage/
 __pycache__/
 *.pyc
 cantina_db.json
@@ -16,4 +16,3 @@ test.py
 test_cantina.py
 instal.bat
 AVVIA_CANTINA.bat
-*.bat
