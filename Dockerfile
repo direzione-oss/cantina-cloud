@@ -12,7 +12,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
-RUN mkdir -p /app/storage
+RUN mkdir -p /app/storage && ln -sf /app/storage/images /app/static
 
 EXPOSE 8501
 
